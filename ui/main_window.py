@@ -3,6 +3,7 @@ import pyqtgraph as pg
 from pyqtgraph.dockarea import *
 import numpy as np
 import pandas as pd
+from datetime import datetime, timedelta
 
 from ui.parameter_tree import ParameterTreeWidget
 from ui.temporal_widget import TemporalWidget
@@ -13,6 +14,8 @@ from database.influxdb_handler import InfluxDBHandler
 class MainWindow(QMainWindow):
     def __init__(self, influxdb: InfluxDBHandler):
         super().__init__()
+        self.updating_region = False
+
         self.influxdb = influxdb
         self.influxdb_data = None
         self.setWindowTitle("StabilityFusion - by: Carlos RIVERA")
@@ -55,8 +58,10 @@ class MainWindow(QMainWindow):
         area.addDock(dock_adev_plot,'right')
         area.addDock(dock_table,'bottom')
 
-        #
+        # Connect signals
         self.param_tree.connect_get_data_action(self.get_data)
+        self.param_tree.connect_update_region_action(self.link_regions)
+        self.temp_widget.region_updated.connect(self.link_regions)
 
     def get_data(self):
         start = self.param_tree.param.child("Data acquisition", "Start").value()
@@ -83,6 +88,41 @@ class MainWindow(QMainWindow):
         # Update plots with new data
         self.update_plots()
 
+    def link_regions(self, sender):
+        if self.updating_region:
+            return
+
+        self.updating_region = True
+
+        if isinstance(sender, pg.LinearRegionItem):
+            new_region = sender.getRegion()
+        else:
+            start = self.param_tree.param.child("Data processing", "Allan deviation", "Start").value()
+            stop = self.param_tree.param.child("Data processing", "Allan deviation", "Stop").value()
+            region_size = self.param_tree.param.child("Data processing", "Allan deviation", "Region size").value()
+            #
+            start = datetime.strptime(start, "%Y-%m-%d %H:%M:%S")
+            stop = datetime.strptime(stop, "%Y-%m-%d %H:%M:%S")
+            #
+            if "Region" in sender.name():
+                stop = start+timedelta(seconds=float(region_size))
+
+            new_region = [value.timestamp() for value in [start,stop]]
+
+
+        # Update all regions
+        for key, plot in self.temp_widget.plots.items():
+            plot["region"].setRegion(new_region)
+
+        # Update parameter tree
+        start, stop = [datetime.fromtimestamp(value) for value in new_region]
+
+        self.param_tree.param.child("Data processing", "Allan deviation", "Start").setValue(start.strftime("%Y-%m-%d %H:%M:%S") )
+        self.param_tree.param.child("Data processing", "Allan deviation", "Stop").setValue(stop.strftime("%Y-%m-%d %H:%M:%S") )
+        self.param_tree.param.child("Data processing", "Allan deviation", "Region size").setValue((stop-start).total_seconds())
+
+        self.updating_region = False
+
     def update_plots(self):
         print("updating plots...")
         df = self.influxdb_data
@@ -94,7 +134,7 @@ class MainWindow(QMainWindow):
             self.add_temporal_trace(time,value,measurement)
 
     def add_temporal_trace(self,x,y,title):
-        self.temp_widget.addWidget(np.arange(len(x.to_numpy())),y.to_numpy(),title)
+        self.temp_widget.addWidget(x.to_numpy(),y.to_numpy(),title)
 
     def handle_dataframe_update(self, row, col):
         option = self.table_df.columns[col]
