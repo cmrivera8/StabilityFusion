@@ -16,6 +16,7 @@ class ParameterTreeWidget(ParameterTree):
                     {'name': 'Start', 'type': 'str', 'value': "2024-12-05 17:45:04"},
                     {'name': 'Stop', 'type': 'str', 'value': "2024-12-05 19:26:07"},
                     {'name': 'Region size', 'type': 'str', 'value': "1000"},
+                    {'name': 'Zoom region', 'type': 'action'},
                 ]}
             ]}
         ]
@@ -28,3 +29,6 @@ class ParameterTreeWidget(ParameterTree):
     def connect_update_region_action(self, callback):
         for param in self.param.child("Data processing", "Allan deviation").childs:
             param.sigValueChanged.connect(callback)
+
+    def connect_zoom_region_action(self, callback):
+        self.param.child("Data processing", "Allan deviation", "Zoom region").sigActivated.connect(callback)

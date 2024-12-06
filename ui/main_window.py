@@ -62,6 +62,7 @@ class MainWindow(QMainWindow):
         self.param_tree.connect_get_data_action(self.get_data)
         self.param_tree.connect_update_region_action(self.link_regions)
         self.temp_widget.region_updated.connect(self.link_regions)
+        self.param_tree.connect_zoom_region_action(self.zoom_region)
 
     def get_data(self):
         start = self.param_tree.param.child("Data acquisition", "Start").value()
@@ -88,6 +89,10 @@ class MainWindow(QMainWindow):
         # Update plots with new data
         self.update_plots()
 
+    def param_to_datetime(self, param):
+        value = param.value()
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+
     def link_regions(self, sender):
         if self.updating_region:
             return
@@ -97,18 +102,15 @@ class MainWindow(QMainWindow):
         if isinstance(sender, pg.LinearRegionItem):
             new_region = sender.getRegion()
         else:
-            start = self.param_tree.param.child("Data processing", "Allan deviation", "Start").value()
-            stop = self.param_tree.param.child("Data processing", "Allan deviation", "Stop").value()
+            start = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Start"))
+            stop = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Stop"))
+
             region_size = self.param_tree.param.child("Data processing", "Allan deviation", "Region size").value()
-            #
-            start = datetime.strptime(start, "%Y-%m-%d %H:%M:%S")
-            stop = datetime.strptime(stop, "%Y-%m-%d %H:%M:%S")
-            #
+
             if "Region" in sender.name():
                 stop = start+timedelta(seconds=float(region_size))
 
             new_region = [value.timestamp() for value in [start,stop]]
-
 
         # Update all regions
         for key, plot in self.temp_widget.plots.items():
@@ -126,15 +128,31 @@ class MainWindow(QMainWindow):
     def update_plots(self):
         print("updating plots...")
         df = self.influxdb_data
+        first_plot = None
         for measurement in df["_measurement"].unique():
             measurement_df = df[df["_measurement"] == measurement]
 
             time = pd.to_datetime(measurement_df["_time"])
             value = measurement_df["_value"]
-            self.add_temporal_trace(time,value,measurement)
+            plot = self.add_temporal_trace(time,value,measurement)
+
+            # Link x-axis
+            if first_plot == None:
+                first_plot = plot["widget"]
+            else:
+                plot["widget"].setXLink(first_plot)
 
     def add_temporal_trace(self,x,y,title):
-        self.temp_widget.addWidget(x.to_numpy(),y.to_numpy(),title)
+        return self.temp_widget.addWidget(x.to_numpy(),y.to_numpy(),title)
+
+    def zoom_region(self):
+        start = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Start")).timestamp()
+        stop = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Stop")).timestamp()
+
+        for _, plot in self.temp_widget.plots.items():
+            plot["widget"].setXRange(start,stop)
+            plot["widget"].enableAutoRange(axis='y')
+            plot["widget"].setAutoVisible(y=True)
 
     def handle_dataframe_update(self, row, col):
         option = self.table_df.columns[col]
