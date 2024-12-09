@@ -43,8 +43,8 @@ class MainWindow(QMainWindow):
 
         # Column headers
         columns = [
-            "Main", "Name", "Description",
-            "Coeff_", "Fractional_", "Plot_temp", "Plot_adev"
+            "Main", "Name", "Coeff_",
+            "Fractional_", "Plot_temp", "Plot_adev"
         ]
 
         # Create an empty dataframe with only column headers
@@ -81,7 +81,6 @@ class MainWindow(QMainWindow):
             self.table_df.loc[len(self.table_df)] = [
                 False, # Main
                 measurement, # Name
-                "", # Description
                 1, # Coeff_
                 1, # Fractional_
                 True, # Plot_temp
@@ -129,6 +128,9 @@ class MainWindow(QMainWindow):
 
         self.updating_region = False
 
+        # Update plots
+        self.update_plots()
+
     def update_plots(self):
         print("updating plots...")
         moving_avg_window = self.param_tree.param.child("Data processing", "Moving Average").value()
@@ -155,10 +157,13 @@ class MainWindow(QMainWindow):
                 plot["widget"].setXLink(first_plot)
 
             ## Allan deviation
-            color = plot["color"]
-            taus, devs, error_bars = get_stab(time, value)
-            self.adev_widget.updateWidget(taus, devs, error_bars, measurement, color)
+            start = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Start")).timestamp()
+            stop = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Stop")).timestamp()
 
+            region = np.where((time > start) & (time < stop))
+            color = plot["color"]
+            taus, devs, error_bars = get_stab(time[region], value[region])
+            self.adev_widget.updateWidget(taus, devs, error_bars, measurement, color)
 
     def zoom_region(self):
         start = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Start")).timestamp()

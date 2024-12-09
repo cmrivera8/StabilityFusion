@@ -14,19 +14,21 @@ class AllanDeviationWidget(pg.GraphicsLayoutWidget):
         self.plots = {}
 
     def updateWidget(self, taus, devs, error_bars, title, color):
+        taus_log10 = np.log10(taus)
+        devs_log10 = np.log10(devs)
+        err_lo = devs_log10 - np.log10(devs - error_bars[0])
+        err_hi = np.log10(devs + error_bars[1]) - devs_log10
+
         # Check if the plots already exists
         if title in self.plots:
             self.plots[title]["data"].setData(taus, devs)
+            self.plots[title]["error"].setData(x=taus_log10, y=devs_log10, top=err_hi, bottom=err_lo)
+            self.updateErrorBarVisibility(self.plots[title])
             return self.plots[title]
 
         # Create new curve and error bars
         self.adev_widget.addLegend(offset=(0,0),labelTextSize= "8pt")
         plot_data = self.adev_widget.plot(taus, devs, pen=pg.mkPen(color=color, width=1.5), name=title)
-
-        taus_log10 = np.log10(taus)
-        devs_log10 = np.log10(devs)
-        err_lo = devs_log10 - np.log10(devs - error_bars[0])
-        err_hi = np.log10(devs + error_bars[1]) - devs_log10
 
         error_data = pg.ErrorBarItem(x=0,y=0,beam=0.05,pen=pg.mkPen(color=color))
         error_data.setData(x=taus_log10, y=devs_log10, top=err_hi, bottom=err_lo)

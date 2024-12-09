@@ -28,7 +28,7 @@ class TemporalWidget(QScrollArea):
     def updateWidget(self, x, y, title="Plot"):
         # Check if the plots already exists
         if title in self.plots:
-            self.plots[title]["data"].setData([x.timestamp() for x in x], y)
+            self.plots[title]["data"].setData(x, y)
             return self.plots[title]
 
         # Create a new plot
