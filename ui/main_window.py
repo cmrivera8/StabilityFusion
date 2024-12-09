@@ -137,7 +137,8 @@ class MainWindow(QMainWindow):
         for measurement in df["_measurement"].unique():
             measurement_df = df[df["_measurement"] == measurement]
 
-            time = pd.to_datetime(measurement_df["_time"])
+            time = pd.to_datetime(measurement_df["_time"]).to_numpy()
+            time = np.array([ts.timestamp() for ts in time])
             value = measurement_df["_value"].to_numpy()
 
             ## Temporal
@@ -145,7 +146,7 @@ class MainWindow(QMainWindow):
             avg_value = moving_average(value, moving_avg_window)
             #
 
-            plot = self.temp_widget.updateWidget(time.to_numpy(),avg_value,measurement)
+            plot = self.temp_widget.updateWidget(time,avg_value,measurement)
 
             # Link x-axis
             if first_plot == None:
@@ -154,8 +155,9 @@ class MainWindow(QMainWindow):
                 plot["widget"].setXLink(first_plot)
 
             ## Allan deviation
+            color = plot["color"]
             taus, devs, error_bars = get_stab(time, value)
-            self.adev_widget.updateWidget(taus, devs, error_bars, measurement)
+            self.adev_widget.updateWidget(taus, devs, error_bars, measurement, color)
 
 
     def zoom_region(self):

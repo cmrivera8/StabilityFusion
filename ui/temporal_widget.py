@@ -10,6 +10,9 @@ class TemporalWidget(QScrollArea):
         super().__init__()
         self.updating = False
 
+        # Available colors
+        self.colors = iter(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'])
+
         # Container for plots
         self.plot_container = QWidget()
         self.plot_layout = QVBoxLayout(self.plot_container)
@@ -30,13 +33,14 @@ class TemporalWidget(QScrollArea):
 
         # Create a new plot
         plot_widget = pg.PlotWidget(title=title, axisItems={'bottom': pg.DateAxisItem()})
-
+        plot_widget.showGrid(x=True, y=True, alpha=0.5)
         plot_widget.setMinimumHeight(150)
-        plot_data = plot_widget.plot([x.timestamp() for x in x], y, pen=pg.mkPen(color='b', width=2))
+        color = next(self.colors)
+        plot_data = plot_widget.plot(x, y, pen=pg.mkPen(color=color, width=2))
 
         # Region
-        region = pg.LinearRegionItem([x[0].timestamp(),(x[-1].timestamp())], swapMode="block")
-        region.setBrush(QtGui.QColor(255, 0, 0, 50))
+        region = pg.LinearRegionItem([x[0],x[-1]], swapMode="block")
+        region.setBrush(QtGui.QColor(255, 0, 0, 30))
         region.sigRegionChangeFinished.connect(self.update_measure_region)
         plot_widget.addItem(region)
 
@@ -48,7 +52,7 @@ class TemporalWidget(QScrollArea):
         self.plot_layout.addWidget(plot_widget)
 
         # Store plot and its data reference
-        self.plots[title] = {"widget": plot_widget, "data": plot_data, "region": region}
+        self.plots[title] = {"widget": plot_widget, "data": plot_data, "region": region, "color": color}
 
         return self.plots[title]
 

@@ -18,6 +18,14 @@ if __name__ == "__main__":
         screen_rect = desktop.screenGeometry(1) # Open on left screen
         window.move(screen_rect.left(),screen_rect.top())
 
+    # Maximize at startup
+    maximize = True
+    if maximize:
+        window.showMaximized()
+    else:
+        window.show()
+    #
+
     window.show()
 
     sys.exit(app.exec_())

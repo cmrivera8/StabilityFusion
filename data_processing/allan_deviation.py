@@ -2,7 +2,7 @@ import allantools
 import numpy as np
 
 def get_stab(ts, values):
-    rate = 1/np.mean(np.diff([ts.timestamp() for ts in ts]))
+    rate = 1/np.mean(np.diff(ts))
     (taus, devs, errs, ns) = allantools.oadev(values, rate=rate, data_type="freq", taus='decade')
 
     err_lo, err_hi = get_errorbars(values,taus,devs,rate=rate,alpha=0,d=2,dev_type="allan")
