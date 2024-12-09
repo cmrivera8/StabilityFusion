@@ -10,6 +10,8 @@ from ui.temporal_widget import TemporalWidget
 from ui.adev_widget import AllanDeviationWidget
 from ui.table_widget import DataTableWidget
 from database.influxdb_handler import InfluxDBHandler
+from data_processing.moving_average import moving_average
+from data_processing.allan_deviation import get_stab
 
 class MainWindow(QMainWindow):
     def __init__(self, influxdb: InfluxDBHandler):
@@ -36,7 +38,8 @@ class MainWindow(QMainWindow):
 
         # Allan deviation
         dock_adev_plot = Dock("Allan deviation", size=(200, 400))
-        dock_adev_plot.addWidget(AllanDeviationWidget())
+        self.adev_widget = AllanDeviationWidget()
+        dock_adev_plot.addWidget(self.adev_widget)
 
         # Column headers
         columns = [
@@ -60,6 +63,7 @@ class MainWindow(QMainWindow):
 
         # Connect signals
         self.param_tree.connect_get_data_action(self.get_data)
+        self.param_tree.connect_moving_average_action(self.update_plots)
         self.param_tree.connect_update_region_action(self.link_regions)
         self.temp_widget.region_updated.connect(self.link_regions)
         self.param_tree.connect_zoom_region_action(self.zoom_region)
@@ -127,14 +131,21 @@ class MainWindow(QMainWindow):
 
     def update_plots(self):
         print("updating plots...")
+        moving_avg_window = self.param_tree.param.child("Data processing", "Moving Average").value()
         df = self.influxdb_data
         first_plot = None
         for measurement in df["_measurement"].unique():
             measurement_df = df[df["_measurement"] == measurement]
 
             time = pd.to_datetime(measurement_df["_time"])
-            value = measurement_df["_value"]
-            plot = self.add_temporal_trace(time,value,measurement)
+            value = measurement_df["_value"].to_numpy()
+
+            ## Temporal
+            # Apply moving average
+            avg_value = moving_average(value, moving_avg_window)
+            #
+
+            plot = self.temp_widget.updateWidget(time.to_numpy(),avg_value,measurement)
 
             # Link x-axis
             if first_plot == None:
@@ -142,8 +153,10 @@ class MainWindow(QMainWindow):
             else:
                 plot["widget"].setXLink(first_plot)
 
-    def add_temporal_trace(self,x,y,title):
-        return self.temp_widget.addWidget(x.to_numpy(),y.to_numpy(),title)
+            ## Allan deviation
+            taus, devs, error_bars = get_stab(time, value)
+            self.adev_widget.updateWidget(taus, devs, error_bars, measurement)
+
 
     def zoom_region(self):
         start = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Start")).timestamp()

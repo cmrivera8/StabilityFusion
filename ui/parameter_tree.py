@@ -11,7 +11,7 @@ class ParameterTreeWidget(ParameterTree):
                 {'name': 'Get data', 'type': 'action'},
             ]},
             {'name': 'Data processing', 'type': 'group', 'children': [
-                {'name': 'Moving Average', 'type': 'int', 'value': 5},
+                {'name': 'Moving Average', 'type': 'int', 'value': 1},
                 {'name': 'Allan deviation', 'type': 'group', 'children': [
                     {'name': 'Start', 'type': 'str', 'value': "2024-12-05 17:45:04"},
                     {'name': 'Stop', 'type': 'str', 'value': "2024-12-05 19:26:07"},
@@ -25,6 +25,9 @@ class ParameterTreeWidget(ParameterTree):
 
     def connect_get_data_action(self, callback):
         self.param.child('Data acquisition', 'Get data').sigActivated.connect(callback)
+
+    def connect_moving_average_action(self, callback):
+        self.param.child("Data processing", "Moving Average").sigValueChanged.connect(callback)
 
     def connect_update_region_action(self, callback):
         for param in self.param.child("Data processing", "Allan deviation").childs:

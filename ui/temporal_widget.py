@@ -22,18 +22,10 @@ class TemporalWidget(QScrollArea):
 
         self.plots = {}
 
-    def addWidget(self, x, y, title="Plot"):
-        """
-        Add a plot widget to the scrollable area with the given x and y values.
-
-        Parameters:
-            x (list or numpy.ndarray): X-axis values.
-            y (list or numpy.ndarray): Y-axis values.
-            title (str): Title of the plot.
-        """
-
+    def updateWidget(self, x, y, title="Plot"):
         # Check if the plots already exists
         if title in self.plots:
+            self.plots[title]["data"].setData([x.timestamp() for x in x], y)
             return self.plots[title]
 
         # Create a new plot
@@ -59,21 +51,6 @@ class TemporalWidget(QScrollArea):
         self.plots[title] = {"widget": plot_widget, "data": plot_data, "region": region}
 
         return self.plots[title]
-
-    def updateWidget(self, x, y, title):
-        """
-        Update the data of an existing plot.
-
-        Parameters:
-            x (list or numpy.ndarray): New X-axis values.
-            y (list or numpy.ndarray): New Y-axis values.
-            title (str): Title of the plot to update.
-        """
-        # Check if the plot exists
-        if title not in self.plots:
-            self.addWidget(x,y,title)
-
-        self.plots[title]["data"].setData(x, y)
 
     def update_measure_region(self):
         if not self.updating:
