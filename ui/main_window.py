@@ -6,6 +6,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import copy
 import os
+import json
 
 from ui.parameter_tree import ParameterTreeWidget
 from ui.temporal_widget import TemporalWidget
@@ -119,7 +120,7 @@ class MainWindow(QMainWindow):
 
             region_size = self.param_tree.param.child("Data processing", "Allan deviation", "Region size").value()
 
-            if "Region" in sender.name():
+            if sender != None and "Region" in sender.name():
                 stop = start+timedelta(seconds=float(region_size))
 
             new_region = [value.timestamp() for value in [start,stop]]
@@ -192,7 +193,7 @@ class MainWindow(QMainWindow):
             plot["widget"].enableAutoRange(axis='y')
             plot["widget"].setAutoVisible(y=True)
 
-    def handle_dataframe_update(self, row, col):
+    def handle_dataframe_update(self, row, col, update_plots=True):
         option = self.table_df.columns[col]
 
         measurement = self.table_df.iloc[row,1]
@@ -205,14 +206,15 @@ class MainWindow(QMainWindow):
         if option == "Plot_adev":
             self.adev_widget.plots[measurement]["data"].setVisible(value)
 
-        self.update_plots()
+        if update_plots:
+            self.update_plots()
 
     def populate_presets(self):
         # Populate the content of the presets combobox based on the file in "presets"
         combobox = self.param_tree.param.child("Presets", "Name")
 
         content = ["Default"]
-        content.extend([file.replace(".json","") for file in os.listdir("presets")])
+        content.extend([file.replace(".json","") for file in os.listdir("presets") if not "tree" in file])
         content.append("New")
 
         combobox.setLimits(content)
@@ -221,21 +223,39 @@ class MainWindow(QMainWindow):
         preset_name = self.param_tree.param.child("Presets", "Name").value()
         self.table_df.to_json("presets/"+preset_name+".json")
 
+        # Save parameter tree state
+        state = json.dumps(self.param_tree.param.saveState())
+        filename = "presets/"+preset_name+"_tree.json"
+        with open(filename, "w") as outfile:
+            outfile.write(state)
+
     def load_preset(self):
         preset_name = self.param_tree.param.child("Presets", "Name").value()
         new_df = pd.read_json("presets/"+preset_name+".json")
         self.table_df.drop(self.table_df.index, inplace=True)
         self.table_df[self.table_df.columns] = new_df
 
+        # Load parameter tree state
+        filename = "presets/"+preset_name+"_tree.json"
+        with open(filename, 'r') as openfile:
+                state = json.loads(openfile.read())
+        self.updating_region = True
+        self.param_tree.param.restoreState(state)
+        self.updating_region = False
+        self.link_regions(None)
+
         self.data_table_widget.update_table_from_dataframe()
 
         for col in range(len(self.table_df.columns)):
             for row in range(len(self.table_df.index)):
-                self.handle_dataframe_update(row,col)
+                self.handle_dataframe_update(row,col,False)
+
+        self.update_plots()
 
     def remove_preset(self):
         preset_name = self.param_tree.param.child("Presets", "Name").value()
         os.remove("presets/"+preset_name+".json")
+        os.remove("presets/"+preset_name+"_tree.json")
         self.populate_presets()
 
     def add_preset(self):
