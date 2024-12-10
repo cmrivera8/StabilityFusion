@@ -134,7 +134,7 @@ class DataTableWidget(QTableWidget):
             row = row if row != None else item.row()
             col = col if col != None else item.column()
 
-            if self.dataframe.columns[col] == "Plot_temp":
+            if self.dataframe.columns[col] in ["Plot_temp", "Plot_adev"]:
                 if item.flags() & Qt.ItemIsUserCheckable:
                     self.dataframe.iloc[row,col] = item.checkState() == Qt.Checked
 

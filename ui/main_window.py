@@ -185,10 +185,15 @@ class MainWindow(QMainWindow):
     def handle_dataframe_update(self, row, col):
         option = self.table_df.columns[col]
 
+        measurement = self.table_df.iloc[row,1]
+        value = self.table_df.iloc[row,col]
+
+        # Control plots visibility
         if option == "Plot_temp":
-            measurement = self.table_df.iloc[row,1]
-            value = self.table_df.iloc[row,col]
             self.temp_widget.plots[measurement]["widget"].setVisible(value)
+
+        if option == "Plot_adev":
+            self.adev_widget.plots[measurement]["data"].setVisible(value)
 
     def populate_presets(self):
         # Populate the content of the presets combobox based on the file in "presets"
