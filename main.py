@@ -19,13 +19,11 @@ if __name__ == "__main__":
         window.move(screen_rect.left(),screen_rect.top())
 
     # Maximize at startup
-    maximize = True
+    maximize = False
     if maximize:
         window.showMaximized()
     else:
         window.show()
     #
-
-    window.show()
 
     sys.exit(app.exec_())

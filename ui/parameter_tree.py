@@ -23,6 +23,7 @@ class ParameterTreeWidget(ParameterTree):
                 {'name': 'Name', 'type': 'list', 'value': 'Default', 'limits': ['Default','New']},
                 {'name': 'Save', 'type': 'action'},
                 {'name': 'Load', 'type': 'action'},
+                {'name': 'Remove', 'type': 'action'},
             ]},
         ]
         self.param = Parameter.create(name='params', type='group', children=params)
@@ -46,6 +47,9 @@ class ParameterTreeWidget(ParameterTree):
 
     def connect_load_preset(self, callback):
         self.param.child("Presets", "Load").sigActivated.connect(callback)
+
+    def connect_remove_preset(self, callback):
+        self.param.child("Presets", "Remove").sigActivated.connect(callback)
 
     def connect_preset_name_selected(self, callback):
         self.param.child("Presets", "Name").sigValueChanged.connect(callback)

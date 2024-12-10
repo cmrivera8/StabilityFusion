@@ -29,7 +29,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(area)
 
         # Parameter tree
-        dock_params = Dock("Parameters", size=(200, 400))
+        dock_params = Dock("Parameters", size=(150, 400))
         self.param_tree = ParameterTreeWidget()
         dock_params.addWidget(self.param_tree)
 
@@ -71,6 +71,7 @@ class MainWindow(QMainWindow):
         self.param_tree.connect_zoom_region_action(self.zoom_region)
         self.param_tree.connect_save_preset(self.save_preset)
         self.param_tree.connect_load_preset(self.load_preset)
+        self.param_tree.connect_remove_preset(self.remove_preset)
         self.param_tree.connect_preset_name_selected(self.add_preset)
 
         # Populate presets combobox
@@ -231,6 +232,11 @@ class MainWindow(QMainWindow):
         for col in range(len(self.table_df.columns)):
             for row in range(len(self.table_df.index)):
                 self.handle_dataframe_update(row,col)
+
+    def remove_preset(self):
+        preset_name = self.param_tree.param.child("Presets", "Name").value()
+        os.remove("presets/"+preset_name+".json")
+        self.populate_presets()
 
     def add_preset(self):
         combobox = self.param_tree.param.child("Presets", "Name")
