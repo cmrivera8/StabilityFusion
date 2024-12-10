@@ -170,6 +170,15 @@ class MainWindow(QMainWindow):
 
             region = np.where((time > start) & (time < stop))
             color = plot["color"]
+
+            # Apply coupling coefficient
+            coeff = self.table_df.loc[self.table_df['Name'] == measurement]["Coeff_"].iloc[0]
+            value = value*float(coeff)
+
+            # Apply fractional factor
+            factor = self.table_df.loc[self.table_df['Name'] == measurement]["Fractional_"].iloc[0]
+            value = value/float(factor)
+
             taus, devs, error_bars = get_stab(time[region], value[region])
             self.adev_widget.updateWidget(taus, devs, error_bars, measurement, color)
 
@@ -194,6 +203,8 @@ class MainWindow(QMainWindow):
 
         if option == "Plot_adev":
             self.adev_widget.plots[measurement]["data"].setVisible(value)
+
+        self.update_plots()
 
     def populate_presets(self):
         # Populate the content of the presets combobox based on the file in "presets"
