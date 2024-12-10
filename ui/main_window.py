@@ -1,9 +1,11 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QSplitter, QWidget, QSizePolicy, QScrollArea
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QSplitter, QWidget, QSizePolicy, QScrollArea, QInputDialog
 import pyqtgraph as pg
 from pyqtgraph.dockarea import *
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
+import copy
+import os
 
 from ui.parameter_tree import ParameterTreeWidget
 from ui.temporal_widget import TemporalWidget
@@ -67,6 +69,12 @@ class MainWindow(QMainWindow):
         self.param_tree.connect_update_region_action(self.link_regions)
         self.temp_widget.region_updated.connect(self.link_regions)
         self.param_tree.connect_zoom_region_action(self.zoom_region)
+        self.param_tree.connect_save_preset(self.save_preset)
+        self.param_tree.connect_load_preset(self.load_preset)
+        self.param_tree.connect_preset_name_selected(self.add_preset)
+
+        # Populate presets combobox
+        self.populate_presets()
 
     def get_data(self):
         start = self.param_tree.param.child("Data acquisition", "Start").value()
@@ -181,3 +189,43 @@ class MainWindow(QMainWindow):
             measurement = self.table_df.iloc[row,1]
             value = self.table_df.iloc[row,col]
             self.temp_widget.plots[measurement]["widget"].setVisible(value)
+
+    def populate_presets(self):
+        # Populate the content of the presets combobox based on the file in "presets"
+        combobox = self.param_tree.param.child("Presets", "Name")
+
+        content = ["Default"]
+        content.extend([file.replace(".json","") for file in os.listdir("presets")])
+        content.append("New")
+
+        combobox.setLimits(content)
+
+    def save_preset(self):
+        preset_name = self.param_tree.param.child("Presets", "Name").value()
+        self.table_df.to_json("presets/"+preset_name+".json")
+
+    def load_preset(self):
+        preset_name = self.param_tree.param.child("Presets", "Name").value()
+        new_df = pd.read_json("presets/"+preset_name+".json")
+        self.table_df.drop(self.table_df.index, inplace=True)
+        self.table_df[self.table_df.columns] = new_df
+
+        self.data_table_widget.update_table_from_dataframe()
+
+        for col in range(len(self.table_df.columns)):
+            for row in range(len(self.table_df.index)):
+                self.handle_dataframe_update(row,col)
+
+    def add_preset(self):
+        combobox = self.param_tree.param.child("Presets", "Name")
+        if combobox.value() == "New":
+            text, ok = QInputDialog.getText(self, 'New preset name', 'Enter the name of the new preset:')
+
+            if ok:
+                # Add the new item before "New"
+                current_values = copy.deepcopy(combobox.opts["limits"])
+                current_values.insert(len(current_values)-1,str(text))
+                combobox.setLimits(current_values)
+                combobox.setValue(str(text))
+
+                self.save_preset()

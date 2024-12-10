@@ -9,6 +9,7 @@ class AllanDeviationWidget(pg.GraphicsLayoutWidget):
         self.adev_widget.setLogMode(x=True, y=True)
         self.adev_widget.setLabel('left', "Allan deviation")
         self.adev_widget.setLabel('bottom', "Integration time", units='s')
+        self.adev_widget.getAxis('bottom').enableAutoSIPrefix(False)
         self.adev_widget.showGrid(x=True, y=True, alpha=0.5)
 
         self.plots = {}

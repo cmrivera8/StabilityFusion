@@ -17,8 +17,13 @@ class ParameterTreeWidget(ParameterTree):
                     {'name': 'Stop', 'type': 'str', 'value': "2024-12-05 19:26:07"},
                     {'name': 'Region size', 'type': 'str', 'value': "1000"},
                     {'name': 'Zoom region', 'type': 'action'},
-                ]}
-            ]}
+                ]},
+            ]},
+            {'name': 'Presets', 'type': 'group', 'children': [
+                {'name': 'Name', 'type': 'list', 'value': 'Default', 'limits': ['Default','New']},
+                {'name': 'Save', 'type': 'action'},
+                {'name': 'Load', 'type': 'action'},
+            ]},
         ]
         self.param = Parameter.create(name='params', type='group', children=params)
         self.setParameters(self.param, showTop=False)
@@ -35,3 +40,12 @@ class ParameterTreeWidget(ParameterTree):
 
     def connect_zoom_region_action(self, callback):
         self.param.child("Data processing", "Allan deviation", "Zoom region").sigActivated.connect(callback)
+
+    def connect_save_preset(self, callback):
+        self.param.child("Presets", "Save").sigActivated.connect(callback)
+
+    def connect_load_preset(self, callback):
+        self.param.child("Presets", "Load").sigActivated.connect(callback)
+
+    def connect_preset_name_selected(self, callback):
+        self.param.child("Presets", "Name").sigValueChanged.connect(callback)

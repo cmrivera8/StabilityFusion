@@ -111,7 +111,7 @@ class DataTableWidget(QTableWidget):
                     # self.setColumnWidth(col,1)
                     self.setItem(row, col, item)
                 elif column[-1] == "_":
-                    cell_widget = AutoValueCell("", compute_auto_value)
+                    cell_widget = AutoValueCell(value, compute_auto_value)
                     self.setCellWidget(row, col, cell_widget)
                 else:
                     # self.horizontalHeader().setSectionResizeMode(col, QHeaderView.Interactive)  # Column 0: Manual resizing
