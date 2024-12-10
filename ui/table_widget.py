@@ -5,6 +5,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtCore import pyqtSignal
 
 class AutoValueCell(QWidget):
+    value_changed = pyqtSignal()
+
     def __init__(self, value, compute_callback, parent=None):
         """
         A custom widget for table cells that includes a value and an "Auto" button.
@@ -24,6 +26,7 @@ class AutoValueCell(QWidget):
 
         # Label to display the value
         self.value_label = QLineEdit(str(value))
+        self.value_label.textChanged.connect(self.emit_value_changed)
         layout.addWidget(self.value_label)
 
         # Button to toggle "Auto" mode
@@ -31,6 +34,9 @@ class AutoValueCell(QWidget):
         self.auto_button.setFixedSize(40, 20)  # Small button
         self.auto_button.clicked.connect(self.toggle_auto)
         layout.addWidget(self.auto_button)
+
+    def emit_value_changed(self):
+        self.value_changed.emit()
 
     def toggle_auto(self):
         """
@@ -60,6 +66,8 @@ class AutoValueCell(QWidget):
 
             # Button
             self.auto_button.setText("Auto")
+
+        self.emit_value_changed()
 
 class DataTableWidget(QTableWidget):
     dataframe_updated = pyqtSignal(int, int)
@@ -112,6 +120,7 @@ class DataTableWidget(QTableWidget):
                     self.setItem(row, col, item)
                 elif column[-1] == "_":
                     cell_widget = AutoValueCell(value, compute_auto_value)
+                    cell_widget.value_changed.connect(lambda item=cell_widget,r=row,c=col: self.update_dataframe_from_table(item, r,c))
                     self.setCellWidget(row, col, cell_widget)
                 else:
                     # self.horizontalHeader().setSectionResizeMode(col, QHeaderView.Interactive)  # Column 0: Manual resizing
@@ -120,12 +129,20 @@ class DataTableWidget(QTableWidget):
 
         self.updating = False
 
-    def update_dataframe_from_table(self, item):
+    def update_dataframe_from_table(self, item, row=None, col=None):
         if not self.updating:
-            row = item.row()
-            col = item.column()
+            row = row if row != None else item.row()
+            col = col if col != None else item.column()
 
-            if item.flags() & Qt.ItemIsUserCheckable:
-                self.dataframe.iloc[row,col] = item.checkState() == Qt.Checked
+            if self.dataframe.columns[col] == "Plot_temp":
+                if item.flags() & Qt.ItemIsUserCheckable:
+                    self.dataframe.iloc[row,col] = item.checkState() == Qt.Checked
+
+            if self.dataframe.columns[col] in ["Coeff_","Fractional_"]:
+                try:
+                    self.dataframe.iloc[row,col] = float(item.value_label.text())
+                except Exception as e:
+                    print("Wrong input, error: ", e)
+                    return
 
             self.dataframe_updated.emit(row,col)
