@@ -46,7 +46,7 @@ class MainWindow(QMainWindow):
 
         # Column headers
         columns = [
-            "Main", "Name", "Coeff_",
+            "Main", "Name", "Description", "Coeff_",
             "Fractional_", "Plot_temp", "Plot_adev"
         ]
 
@@ -78,12 +78,15 @@ class MainWindow(QMainWindow):
         # Populate presets combobox
         self.populate_presets()
 
-    def get_data(self):
+    def get_data(self,update_table=True):
         start = self.param_tree.param.child("Data acquisition", "Start").value()
         stop = self.param_tree.param.child("Data acquisition", "Stop").value()
         self.influxdb_data = self.influxdb.db_to_df(start, stop, "")
 
         # Update table with new data
+        if not update_table:
+            return
+
         influx_df = self.influxdb_data
         measurements = influx_df["_measurement"].unique()
         for measurement in measurements:
@@ -91,6 +94,7 @@ class MainWindow(QMainWindow):
             self.table_df.loc[len(self.table_df)] = [
                 False, # Main
                 measurement, # Name
+                "", # Description
                 1, # Coeff_
                 1, # Fractional_
                 True, # Plot_temp
@@ -171,6 +175,8 @@ class MainWindow(QMainWindow):
             stop = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Stop")).timestamp()
 
             region = np.where((time > start) & (time < stop))
+            if np.size(region) == 0:
+                region = np.arange(len(time))
             color = plot["color"]
 
             # Apply coupling coefficient
@@ -242,6 +248,7 @@ class MainWindow(QMainWindow):
         self.updating_region = True
         self.param_tree.param.restoreState(state)
         self.updating_region = False
+        self.get_data(False)
         self.link_regions(None)
 
         self.data_table_widget.update_table_from_dataframe()

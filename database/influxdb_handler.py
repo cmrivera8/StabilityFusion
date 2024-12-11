@@ -61,6 +61,7 @@ class InfluxDBHandler:
 
         # self.db_df = pd.DataFrame([vars(row) for row in fluxtable_json])
 
+        # self.db_df.to_pickle("test.pkl")
         self.db_df = pd.read_pickle("test.pkl")
 
         return self.db_df
