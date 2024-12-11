@@ -3,6 +3,7 @@ import numpy as np
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView, QCheckBox, QWidget, QAbstractScrollArea, QHBoxLayout, QLabel, QPushButton,QLineEdit
 from PyQt5.QtCore import Qt
 from PyQt5.QtCore import pyqtSignal
+from engineering_notation import EngNumber
 
 class AutoValueCell(QWidget):
     value_changed = pyqtSignal()
@@ -36,6 +37,10 @@ class AutoValueCell(QWidget):
         layout.addWidget(self.auto_button)
 
     def emit_value_changed(self):
+        try:
+            self.value_label.setText(str(EngNumber(self.value_label.text())))
+        except Exception as e:
+            pass
         self.value_changed.emit()
 
     def toggle_auto(self):
@@ -140,7 +145,7 @@ class DataTableWidget(QTableWidget):
 
             if self.dataframe.columns[col] in ["Coeff_","Fractional_"]:
                 try:
-                    self.dataframe.iloc[row,col] = float(item.value_label.text())
+                    self.dataframe.iloc[row,col] = float(EngNumber(item.value_label.text()))
                 except Exception as e:
                     print("Wrong input, error: ", e)
                     return

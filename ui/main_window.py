@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import copy
 import os
 import json
+from engineering_notation import EngNumber
 
 from ui.parameter_tree import ParameterTreeWidget
 from ui.temporal_widget import TemporalWidget
@@ -238,6 +239,10 @@ class MainWindow(QMainWindow):
     def load_preset(self):
         preset_name = self.param_tree.param.child("Presets", "Name").value()
         new_df = pd.read_json("presets/"+preset_name+".json")
+
+        new_df['Coeff_'] = new_df['Coeff_'].apply(lambda x: EngNumber(float(x)))
+        new_df['Fractional_'] = new_df['Fractional_'].apply(lambda x: EngNumber(float(x)))
+
         self.table_df.drop(self.table_df.index, inplace=True)
         self.table_df[self.table_df.columns] = new_df
 
