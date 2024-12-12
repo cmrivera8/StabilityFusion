@@ -8,6 +8,7 @@ import copy
 import os
 import json
 from engineering_notation import EngNumber
+from scipy.stats import linregress
 
 from ui.parameter_tree import ParameterTreeWidget
 from ui.temporal_widget import TemporalWidget
@@ -75,6 +76,7 @@ class MainWindow(QMainWindow):
         self.param_tree.connect_load_preset(self.load_preset)
         self.param_tree.connect_remove_preset(self.remove_preset)
         self.param_tree.connect_preset_name_selected(self.add_preset)
+        self.data_table_widget.auto_value_request.connect(self.compute_auto_value)
 
         # Populate presets combobox
         self.populate_presets()
@@ -283,3 +285,86 @@ class MainWindow(QMainWindow):
                 combobox.setValue(str(text))
 
                 self.save_preset()
+
+    def db_data_to_array(self, measurement):
+        df = self.influxdb_data
+        measurement_df = df[df["_measurement"] == measurement]
+
+        time = pd.to_datetime(measurement_df["_time"]).to_numpy()
+        time = np.array([ts.timestamp() for ts in time])
+        value = measurement_df["_value"].to_numpy()
+
+        start = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Start")).timestamp()
+        stop = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Stop")).timestamp()
+
+        region = np.where((time > start) & (time < stop))
+
+        if np.size(region) == 0:
+            region = np.arange(len(time))
+
+        time = time[region]
+        value = df.loc[df["_measurement"] == measurement]["_value"].to_numpy()[region]
+
+        return time, value
+
+    def resample_data(self, time, values, interval='1s'):
+        """
+        Resample data based on time and values arrays, applying a moving average.
+
+        Parameters:
+            time (array-like): Array of timestamps (e.g., seconds).
+            values (array-like): Array of corresponding values.
+            interval (str): Resampling interval (default is '1s' for 1 second).
+
+        Returns:
+            pd.DataFrame: Resampled data with columns ['time', 'values'].
+        """
+        # Convert time array to TimedeltaIndex
+        time_index = pd.to_timedelta(time, unit='s')
+
+        # Create a DataFrame with time as index
+        data = pd.DataFrame({'values': values}, index=time_index)
+
+        # Resample the data and compute the mean
+        resampled_data = data['values'].resample(interval).mean()
+
+        # Handle Nan values
+        resampled_data = resampled_data.fillna(method='ffill')
+
+        # Reset index to get timestamps back as a column
+        resampled_data = resampled_data.reset_index()
+
+        # Rename columns for clarity
+        resampled_data.columns = ['time', 'values']
+
+        return resampled_data["values"].to_numpy()
+
+    def compute_auto_value(self, button):
+        row = button.row
+        col = button.col
+        measurement = button.measurement
+        item_type = button.item_type
+
+        widget = self.data_table_widget.cellWidget(row, col)
+
+        # Use region
+        param_ts, param_val = self.db_data_to_array(measurement)
+        freq_ts, freq_val = self.db_data_to_array("counter")
+        #
+
+        if item_type == "Coeff_":
+            # Using linear regression to find correlation
+            x = self.resample_data(param_ts, param_val)
+            y = self.resample_data(freq_ts, freq_val)
+            min_len = min(len(x), len(y))
+            slope, intercept, r_value, p_value, std_err = linregress(x[-min_len:],y[-min_len:])
+
+            value = slope
+
+        if item_type == "Fractional_":
+            value = np.mean(param_val)
+
+        widget.value_label.setText(str(EngNumber(value)))
+
+        # Apply value
+        widget.value_label.returnPressed.emit()

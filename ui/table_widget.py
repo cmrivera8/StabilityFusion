@@ -8,16 +8,14 @@ from engineering_notation import EngNumber
 class AutoValueCell(QWidget):
     value_changed = pyqtSignal()
 
-    def __init__(self, value, compute_callback, parent=None):
+    def __init__(self, measurement, item_type, row, col, value, auto_value_method, parent=None):
         """
         A custom widget for table cells that includes a value and an "Auto" button.
 
         :param value: Initial value to display.
-        :param compute_callback: A function that computes the automatic value.
         :param parent: Parent widget.
         """
         super().__init__(parent)
-        self.compute_callback = compute_callback
         self.is_auto = False
         self.old_manual = 0
 
@@ -27,13 +25,17 @@ class AutoValueCell(QWidget):
 
         # Label to display the value
         self.value_label = QLineEdit(str(value))
-        self.value_label.textChanged.connect(self.emit_value_changed)
+        self.value_label.returnPressed.connect(self.emit_value_changed)
         layout.addWidget(self.value_label)
 
         # Button to toggle "Auto" mode
         self.auto_button = QPushButton("Auto")
+        self.auto_button.measurement = measurement
+        self.auto_button.item_type = item_type
+        self.auto_button.row = row
+        self.auto_button.col = col
         self.auto_button.setFixedSize(40, 20)  # Small button
-        self.auto_button.clicked.connect(self.toggle_auto)
+        self.auto_button.clicked.connect(auto_value_method)
         layout.addWidget(self.auto_button)
 
     def emit_value_changed(self):
@@ -76,6 +78,7 @@ class AutoValueCell(QWidget):
 
 class DataTableWidget(QTableWidget):
     dataframe_updated = pyqtSignal(int, int)
+    auto_value_request = pyqtSignal(object)
 
     def __init__(self, dataframe: pd):
         super().__init__()
@@ -124,7 +127,9 @@ class DataTableWidget(QTableWidget):
                     # self.setColumnWidth(col,1)
                     self.setItem(row, col, item)
                 elif column[-1] == "_":
-                    cell_widget = AutoValueCell(value, compute_auto_value)
+                    measurement = self.dataframe.iloc[row,1]
+                    item_type = self.dataframe.columns[col]
+                    cell_widget = AutoValueCell(measurement, item_type, row, col, value, self.connect_auto_value)
                     cell_widget.value_changed.connect(lambda item=cell_widget,r=row,c=col: self.update_dataframe_from_table(item, r,c))
                     self.setCellWidget(row, col, cell_widget)
                 else:
@@ -133,6 +138,9 @@ class DataTableWidget(QTableWidget):
 
 
         self.updating = False
+
+    def connect_auto_value(self):
+        self.auto_value_request.emit(self.sender())
 
     def update_dataframe_from_table(self, item, row=None, col=None):
         if not self.updating:
