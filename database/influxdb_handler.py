@@ -35,21 +35,18 @@ class InfluxDBHandler:
         fluxtable_json = json.loads(fluxtable.to_json(), object_hook=lambda d: SimpleNamespace(**d))
         return fluxtable_json
 
-    def db_to_df(self, start, stop, measurement, filter=None, aggregate=None, target_timezone_offset=-2):
-        def string_to_date(string_date):
-            if "." in string_date:
-                date_format="%Y-%m-%d %H:%M:%S.%f"
-            else:
-                date_format="%Y-%m-%d %H:%M:%S"
-            dt = datetime.strptime(string_date, date_format)
-            dt = dt.replace(tzinfo=ZoneInfo("Europe/Paris"))
+    def db_to_df(self, start, stop):
+        def string_to_date(date_str):
+            # From string to local timezone
+            dt = datetime.fromisoformat(date_str).replace(tzinfo=ZoneInfo("Europe/Paris"))
+            # From local datetime to UTC
+            dt = dt.astimezone(ZoneInfo("UTC"))
+            # Apply format compatible with Flux
+            dt = dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             return dt
 
-        def date_to_string(input_date, date_format="%Y-%m-%dT%H:%M:%S.%f"):
-            return datetime.strftime(input_date, format=date_format)+"Z"
-
-        start = date_to_string(string_to_date(start))
-        stop = date_to_string(string_to_date(stop))
+        start = string_to_date(start)
+        stop = string_to_date(stop)
 
         query = """
         import "date"
@@ -57,22 +54,17 @@ class InfluxDBHandler:
             |> range(start: {start}, stop: {stop})
         """.format(db_bucket=self.bucket, start=start, stop=stop)
 
-        # fluxtable_json = self.flux_to_points_obj(self.query_api.query(query, org=self.org))
+        fluxtable_json = self.flux_to_points_obj(self.query_api.query(query, org=self.org))
 
-        # self.db_df = pd.DataFrame([vars(row) for row in fluxtable_json])
+        self.db_df = pd.DataFrame([vars(row) for row in fluxtable_json])
 
-        # self.db_df.to_pickle("test.pkl")
-        self.db_df = pd.read_pickle("test.pkl")
+        # Convert _time column to datetime in UTC
+        self.db_df["_time"] = pd.to_datetime(self.db_df["_time"], utc=True)
+
+        # Convert _time column to Europe/Paris timezone
+        self.db_df["_time"] = self.db_df["_time"].dt.tz_convert("Europe/Paris")
+
+        # self.db_df.to_pickle("test.pkl") # Save
+        # self.db_df = pd.read_pickle("test.pkl") # Load
 
         return self.db_df
-
-        # |> filter(fn: (r) => r._measurement == "{measurement}")
-#     # Add moving average filter if required
-#     if not filter == None:
-#         query += "\n|> timedMovingAverage(every: 1s, period: {tau}s)".format(tau=filter)
-
-#     if not aggregate == None:
-#         query += """
-#         |> aggregateWindow(every: {aggregate}ms, fn: mean, createEmpty: true)
-#         |> fill(usePrevious: true)
-#         """.format(aggregate=aggregate)

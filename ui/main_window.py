@@ -84,7 +84,7 @@ class MainWindow(QMainWindow):
     def get_data(self,update_table=True):
         start = self.param_tree.param.child("Data acquisition", "Start").value()
         stop = self.param_tree.param.child("Data acquisition", "Stop").value()
-        self.influxdb_data = self.influxdb.db_to_df(start, stop, "")
+        self.influxdb_data = self.influxdb.db_to_df(start, stop)
 
         # Update table with new data
         if not update_table:

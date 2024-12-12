@@ -6,15 +6,15 @@ class ParameterTreeWidget(ParameterTree):
 
         params = [
             {'name': 'Data acquisition', 'type': 'group', 'children': [
-                {'name': 'Start', 'type': 'str', 'value': "2024-12-10 17:45:04"},
-                {'name': 'Stop', 'type': 'str', 'value': "2024-12-10 18:26:07"},
+                {'name': 'Start', 'type': 'str', 'value': "2024-12-12 15:34:33"},
+                {'name': 'Stop', 'type': 'str', 'value': "2024-12-12 15:40:46"},
                 {'name': 'Get data', 'type': 'action'},
             ]},
             {'name': 'Data processing', 'type': 'group', 'children': [
                 {'name': 'Moving Average', 'type': 'int', 'value': 1},
                 {'name': 'Allan deviation', 'type': 'group', 'children': [
-                    {'name': 'Start', 'type': 'str', 'value': "2024-12-10 17:45:04"},
-                    {'name': 'Stop', 'type': 'str', 'value': "2024-12-10 18:26:07"},
+                    {'name': 'Start', 'type': 'str', 'value': "2024-12-12 15:34:33"},
+                    {'name': 'Stop', 'type': 'str', 'value': "2024-12-12 15:40:46"},
                     {'name': 'Region size', 'type': 'str', 'value': "1000"},
                     {'name': 'Zoom region', 'type': 'action'},
                 ]},
