@@ -190,7 +190,10 @@ class MainWindow(QMainWindow):
             factor = self.table_df.loc[self.table_df['Name'] == measurement]["Fractional_"].iloc[0]
             value = value/float(factor)
 
-            taus, devs, error_bars = get_stab(time[region], value[region])
+            # Calculate Allan deviation
+            mode = self.param_tree.param.child("Data processing", "Allan deviation", "Mode").value().lower()
+
+            taus, devs, error_bars = get_stab(time[region], value[region], mode)
             self.adev_widget.updateWidget(taus, devs, error_bars, measurement, color)
 
     def zoom_region(self):

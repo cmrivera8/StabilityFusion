@@ -1,9 +1,9 @@
 import allantools
 import numpy as np
 
-def get_stab(ts, values):
+def get_stab(ts, values, mode='decade'):
     rate = 1/np.mean(np.diff(ts))
-    (taus, devs, errs, ns) = allantools.oadev(values, rate=rate, data_type="freq", taus='decade')
+    (taus, devs, errs, ns) = allantools.oadev(values, rate=rate, data_type="freq", taus=mode)
 
     err_lo, err_hi = get_errorbars(values,taus,devs,rate=rate,alpha=0,d=2,dev_type="allan")
     error_bars = [np.array(err_lo),np.array(err_hi)]

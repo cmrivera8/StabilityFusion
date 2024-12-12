@@ -16,6 +16,7 @@ class ParameterTreeWidget(ParameterTree):
                     {'name': 'Start', 'type': 'str', 'value': "2024-12-12 15:34:33"},
                     {'name': 'Stop', 'type': 'str', 'value': "2024-12-12 15:40:46"},
                     {'name': 'Region size', 'type': 'str', 'value': "1000"},
+                    {'name': 'Mode', 'type': 'list', 'value': 'Decade', 'limits': ['Decade','Octave','All']},
                     {'name': 'Zoom region', 'type': 'action'},
                 ]},
             ]},
