@@ -93,6 +93,9 @@ class MainWindow(QMainWindow):
         influx_df = self.influxdb_data
         measurements = influx_df["_measurement"].unique()
         for measurement in measurements:
+            # Check if row exists
+            if self.table_df["Name"].eq(measurement).any():
+                continue
             # Add a row with individual column values
             self.table_df.loc[len(self.table_df)] = [
                 False, # Main
