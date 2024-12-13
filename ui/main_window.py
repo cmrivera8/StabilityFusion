@@ -112,6 +112,41 @@ class MainWindow(QMainWindow):
         # Update plots with new data
         self.update_plots()
 
+    def resample_data(self, time, values, interval='1s'):
+        """
+        Resample data based on time and values arrays, applying a moving average.
+
+        Parameters:
+            time (array-like): Array of timestamps (e.g., seconds).
+            values (array-like): Array of corresponding values.
+            interval (str): Resampling interval (default is '1s' for 1 second).
+
+        Returns:
+            pd.DataFrame: Resampled data with columns ['time', 'values'].
+        """
+        # Convert time array to DatetimeIndex (assuming time is in seconds since epoch)
+        time_index = pd.to_datetime(time, unit='s')
+
+        # Create a DataFrame with time as index
+        data = pd.DataFrame({'values': values}, index=time_index)
+
+        # Resample the data and compute the mean
+        resampled_data = data['values'].resample(interval).mean()
+
+        # Handle Nan values
+        resampled_data = resampled_data.ffill()
+
+        # Reset index to get timestamps back as a column
+        resampled_data = resampled_data.reset_index()
+
+        # Rename columns for clarity
+        resampled_data.columns = ['time', 'values']
+
+        # Convert the time column to Unix timestamps using .dt.timestamp()
+        resampled_data['time'] = resampled_data['time'].astype('int64') / 10**9
+
+        return resampled_data["time"].to_numpy(), resampled_data["values"].to_numpy()
+
     def param_to_datetime(self, param):
         value = param.value()
         return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
@@ -163,12 +198,19 @@ class MainWindow(QMainWindow):
             time = np.array([ts.timestamp() for ts in time])
             value = measurement_df["_value"].to_numpy()
 
+            # Resample data to 1s
+            if np.mean(np.diff(time)) < 1:
+                resample_time, resample_value = self.resample_data(time,value)
+            else:
+                resample_time = time
+                resample_value = value
+
             ## Temporal
             # Apply moving average
-            avg_value = moving_average(value, moving_avg_window)
+            avg_value = moving_average(resample_value, moving_avg_window)
             #
 
-            plot = self.temp_widget.updateWidget(time,avg_value,measurement)
+            plot = self.temp_widget.updateWidget(resample_time,avg_value,measurement)
 
             # Link x-axis
             if first_plot == None:
@@ -313,38 +355,6 @@ class MainWindow(QMainWindow):
 
         return time, value
 
-    def resample_data(self, time, values, interval='1s'):
-        """
-        Resample data based on time and values arrays, applying a moving average.
-
-        Parameters:
-            time (array-like): Array of timestamps (e.g., seconds).
-            values (array-like): Array of corresponding values.
-            interval (str): Resampling interval (default is '1s' for 1 second).
-
-        Returns:
-            pd.DataFrame: Resampled data with columns ['time', 'values'].
-        """
-        # Convert time array to TimedeltaIndex
-        time_index = pd.to_timedelta(time, unit='s')
-
-        # Create a DataFrame with time as index
-        data = pd.DataFrame({'values': values}, index=time_index)
-
-        # Resample the data and compute the mean
-        resampled_data = data['values'].resample(interval).mean()
-
-        # Handle Nan values
-        resampled_data = resampled_data.fillna(method='ffill')
-
-        # Reset index to get timestamps back as a column
-        resampled_data = resampled_data.reset_index()
-
-        # Rename columns for clarity
-        resampled_data.columns = ['time', 'values']
-
-        return resampled_data["values"].to_numpy()
-
     def compute_auto_value(self, button):
         row = button.row
         col = button.col
@@ -360,8 +370,8 @@ class MainWindow(QMainWindow):
 
         if item_type == "Coeff_":
             # Using linear regression to find correlation
-            x = self.resample_data(param_ts, param_val)
-            y = self.resample_data(freq_ts, freq_val)
+            _,x = self.resample_data(param_ts, param_val)
+            _,y = self.resample_data(freq_ts, freq_val)
             min_len = min(len(x), len(y))
             slope, intercept, r_value, p_value, std_err = linregress(x[-min_len:],y[-min_len:])
 
