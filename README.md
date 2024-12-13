@@ -101,7 +101,7 @@ I welcome contributions to enhance StabilityFusion! To contribute:
 
 ## License
 
-StabilityFusion is licensed under the GNU Affero General Public License v3.0. See the [LICENSE](LICENSE) file for details.
+StabilityFusion is distributed under the GNU General Public License version 2 (GPLv2). For more details, please refer to the [LICENSE](LICENSE) file.
 
 <!-- ## Acknowledgments
 
