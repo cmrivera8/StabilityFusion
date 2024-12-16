@@ -272,6 +272,7 @@ class MainWindow(QMainWindow):
             if self.adev_widget.plots[measurement].get("to_be_updated") and self.adev_widget.plots[measurement]["to_be_updated"]:
                 # Update was skipped when it was hidden
                 self.update_adev_plot(measurement)
+                self.adev_widget.plots[measurement]["to_be_updated"] = False
 
         if option in ["Coeff_","Fractional_"]:
             self.update_adev_plot(measurement)
