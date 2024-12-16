@@ -17,6 +17,7 @@ from ui.table_widget import DataTableWidget
 from database.influxdb_handler import InfluxDBHandler
 from data_processing.moving_average import moving_average
 from data_processing.allan_deviation import get_stab
+from data_processing.utils import resample_data
 
 class MainWindow(QMainWindow):
     def __init__(self, influxdb: InfluxDBHandler):
@@ -67,28 +68,55 @@ class MainWindow(QMainWindow):
         area.addDock(dock_table,'bottom')
 
         # Connect signals
-        self.param_tree.connect_get_data_action(self.get_data)
-        self.param_tree.connect_moving_average_action(self.update_plots)
-        self.param_tree.connect_update_region_action(self.link_regions)
         self.temp_widget.region_updated.connect(self.link_regions)
-        self.param_tree.connect_zoom_region_action(self.zoom_region)
-        self.param_tree.connect_save_preset(self.save_preset)
-        self.param_tree.connect_load_preset(self.load_preset)
-        self.param_tree.connect_remove_preset(self.remove_preset)
-        self.param_tree.connect_preset_name_selected(self.add_preset)
         self.data_table_widget.auto_value_request.connect(self.compute_auto_value)
+        self.param_tree.param.sigTreeStateChanged.connect(self.param_change)
 
         # Populate presets combobox
         self.populate_presets()
 
-    def get_data(self,update_table=True):
+    def param_change(self, params, changes):
+        if self.param_tree.params_changing:
+            return
+
+        param = changes[0][0]
+        data = changes[0][2]
+
+        # Data acquisition
+        if param.name() == 'Get data':
+            self.get_data()
+            self.update_table()
+            self.update_temporal_plot()
+            self.update_adev_plot()
+
+        # Data processing
+        if param.name() == 'Moving Average':
+            self.update_temporal_plot()
+
+        if param.parent().name() == 'Allan deviation':
+            if param.name() == 'Zoom region':
+                self.zoom_region()
+                return
+            self.link_regions(param)
+            self.update_adev_plot()
+
+        # Presets
+        if param.parent().name() == 'Presets':
+            if param.name() == 'Name':
+                self.param_tree.params_changing = True
+                self.add_preset()
+                self.param_tree.params_changing = False
+            if param.name() == 'Save':
+                self.save_preset()
+            if param.name() == 'Load':
+                self.load_preset()
+            if param.name() == 'Remove':
+                self.remove_preset()
+
+    def get_data(self):
         start = self.param_tree.param.child("Data acquisition", "Start").value()
         stop = self.param_tree.param.child("Data acquisition", "Stop").value()
         self.influxdb_data = self.influxdb.db_to_df(start, stop)
-
-        # Update table with new data
-        if not update_table:
-            return
 
         influx_df = self.influxdb_data
         measurements = influx_df["_measurement"].unique()
@@ -107,45 +135,8 @@ class MainWindow(QMainWindow):
                 True, # Plot_adev
                 ]
 
+    def update_table(self):
         self.data_table_widget.update_table_from_dataframe()
-
-        # Update plots with new data
-        self.update_plots()
-
-    def resample_data(self, time, values, interval='1s'):
-        """
-        Resample data based on time and values arrays, applying a moving average.
-
-        Parameters:
-            time (array-like): Array of timestamps (e.g., seconds).
-            values (array-like): Array of corresponding values.
-            interval (str): Resampling interval (default is '1s' for 1 second).
-
-        Returns:
-            pd.DataFrame: Resampled data with columns ['time', 'values'].
-        """
-        # Convert time array to DatetimeIndex (assuming time is in seconds since epoch)
-        time_index = pd.to_datetime(time, unit='s')
-
-        # Create a DataFrame with time as index
-        data = pd.DataFrame({'values': values}, index=time_index)
-
-        # Resample the data and compute the mean
-        resampled_data = data['values'].resample(interval).mean()
-
-        # Handle Nan values
-        resampled_data = resampled_data.ffill()
-
-        # Reset index to get timestamps back as a column
-        resampled_data = resampled_data.reset_index()
-
-        # Rename columns for clarity
-        resampled_data.columns = ['time', 'values']
-
-        # Convert the time column to Unix timestamps using .dt.timestamp()
-        resampled_data['time'] = resampled_data['time'].astype('int64') / 10**9
-
-        return resampled_data["time"].to_numpy(), resampled_data["values"].to_numpy()
 
     def param_to_datetime(self, param):
         value = param.value()
@@ -183,11 +174,7 @@ class MainWindow(QMainWindow):
 
         self.updating_region = False
 
-        # Update plots
-        self.update_plots()
-
-    def update_plots(self):
-        print("updating plots...")
+    def update_temporal_plot(self):
         moving_avg_window = self.param_tree.param.child("Data processing", "Moving Average").value()
         df = self.influxdb_data
         first_plot = None
@@ -200,7 +187,7 @@ class MainWindow(QMainWindow):
 
             # Resample data to 1s
             if np.mean(np.diff(time)) < 1:
-                resample_time, resample_value = self.resample_data(time,value)
+                resample_time, resample_value = resample_data(time,value)
             else:
                 resample_time = time
                 resample_value = value
@@ -218,6 +205,15 @@ class MainWindow(QMainWindow):
             else:
                 plot["widget"].setXLink(first_plot)
 
+    def update_adev_plot(self):
+        df = self.influxdb_data
+        for measurement in df["_measurement"].unique():
+            measurement_df = df[df["_measurement"] == measurement]
+
+            time = pd.to_datetime(measurement_df["_time"]).to_numpy()
+            time = np.array([ts.timestamp() for ts in time])
+            value = measurement_df["_value"].to_numpy()
+
             ## Allan deviation
             start = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Start")).timestamp()
             stop = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Stop")).timestamp()
@@ -225,7 +221,11 @@ class MainWindow(QMainWindow):
             region = np.where((time > start) & (time < stop))
             if np.size(region) == 0:
                 region = np.arange(len(time))
-            color = plot["color"]
+
+            if self.temp_widget.color_dct.get(measurement):
+                color = self.temp_widget.color_dct[measurement]
+            else:
+                color=None
 
             # Apply coupling coefficient
             coeff = self.table_df.loc[self.table_df['Name'] == measurement]["Coeff_"].iloc[0]
@@ -250,7 +250,7 @@ class MainWindow(QMainWindow):
             plot["widget"].enableAutoRange(axis='y')
             plot["widget"].setAutoVisible(y=True)
 
-    def handle_dataframe_update(self, row, col, update_plots=True):
+    def handle_dataframe_update(self, row, col):
         option = self.table_df.columns[col]
 
         measurement = self.table_df.iloc[row,1]
@@ -263,8 +263,8 @@ class MainWindow(QMainWindow):
         if option == "Plot_adev":
             self.adev_widget.plots[measurement]["data"].setVisible(value)
 
-        if update_plots:
-            self.update_plots()
+        if option in ["Coeff_","Fractional_"]:
+            self.update_adev_plot()
 
     def populate_presets(self):
         # Populate the content of the presets combobox based on the file in "presets"
@@ -301,18 +301,22 @@ class MainWindow(QMainWindow):
         with open(filename, 'r') as openfile:
                 state = json.loads(openfile.read())
         self.updating_region = True
+        self.params_changing = True
         self.param_tree.param.restoreState(state)
         self.updating_region = False
-        self.get_data(False)
+        self.params_changing = False
+
+        # Update plots and table
+        self.get_data()
+        self.update_temporal_plot()
+        self.update_adev_plot()
         self.link_regions(None)
 
-        self.data_table_widget.update_table_from_dataframe()
+        self.update_table()
 
         for col in range(len(self.table_df.columns)):
             for row in range(len(self.table_df.index)):
-                self.handle_dataframe_update(row,col,False)
-
-        self.update_plots()
+                self.handle_dataframe_update(row,col)
 
     def remove_preset(self):
         preset_name = self.param_tree.param.child("Presets", "Name").value()
@@ -370,8 +374,8 @@ class MainWindow(QMainWindow):
 
         if item_type == "Coeff_":
             # Using linear regression to find correlation
-            _,x = self.resample_data(param_ts, param_val)
-            _,y = self.resample_data(freq_ts, freq_val)
+            _,x = resample_data(param_ts, param_val)
+            _,y = resample_data(freq_ts, freq_val)
             min_len = min(len(x), len(y))
             slope, intercept, r_value, p_value, std_err = linregress(x[-min_len:],y[-min_len:])
 

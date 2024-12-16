@@ -12,6 +12,7 @@ class TemporalWidget(QScrollArea):
 
         # Available colors
         self.colors = iter(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']*3)
+        self.color_dct = {}
 
         # Container for plots
         self.plot_container = QWidget()
@@ -36,6 +37,7 @@ class TemporalWidget(QScrollArea):
         plot_widget.showGrid(x=True, y=True, alpha=0.5)
         plot_widget.setMinimumHeight(150)
         color = next(self.colors)
+        self.color_dct[title] = color
         plot_data = plot_widget.plot(x, y, pen=pg.mkPen(color=color, width=2))
 
         # Region
