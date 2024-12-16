@@ -211,6 +211,10 @@ class MainWindow(QMainWindow):
         measurement_list = df["_measurement"].unique() if measurement == None else [measurement]
 
         for measurement in measurement_list:
+            if self.adev_widget.plots.get(measurement) and not self.adev_widget.plots[measurement]['data'].isVisible():
+                # Skip and mark as "to be updated" (to be updated when it becomes visible)
+                self.adev_widget.plots[measurement]['to_be_updated'] = True
+                continue
             measurement_df = df[df["_measurement"] == measurement]
 
             time = pd.to_datetime(measurement_df["_time"]).to_numpy()
@@ -265,6 +269,9 @@ class MainWindow(QMainWindow):
 
         if option == "Plot_adev":
             self.adev_widget.plots[measurement]["data"].setVisible(value)
+            if self.adev_widget.plots[measurement].get("to_be_updated") and self.adev_widget.plots[measurement]["to_be_updated"]:
+                # Update was skipped when it was hidden
+                self.update_adev_plot(measurement)
 
         if option in ["Coeff_","Fractional_"]:
             self.update_adev_plot(measurement)
