@@ -60,4 +60,6 @@ class TemporalWidget(QScrollArea):
 
     def update_measure_region(self):
         if not self.updating:
+            self.updating = True
             self.region_updated.emit(self.sender())
+            self.updating = False

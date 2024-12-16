@@ -22,7 +22,6 @@ from data_processing.utils import resample_data
 class MainWindow(QMainWindow):
     def __init__(self, influxdb: InfluxDBHandler):
         super().__init__()
-        self.updating_region = False
 
         self.influxdb = influxdb
         self.influxdb_data = None
@@ -143,10 +142,10 @@ class MainWindow(QMainWindow):
         return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
 
     def link_regions(self, sender):
-        if self.updating_region:
+        if self.param_tree.params_changing:
             return
 
-        self.updating_region = True
+        self.param_tree.params_changing = True
 
         if isinstance(sender, pg.LinearRegionItem):
             new_region = sender.getRegion()
@@ -172,7 +171,9 @@ class MainWindow(QMainWindow):
         self.param_tree.param.child("Data processing", "Allan deviation", "Stop").setValue(stop.strftime("%Y-%m-%d %H:%M:%S") )
         self.param_tree.param.child("Data processing", "Allan deviation", "Region size").setValue((stop-start).total_seconds())
 
-        self.updating_region = False
+        self.param_tree.params_changing = False
+
+        self.update_adev_plot()
 
     def update_temporal_plot(self):
         moving_avg_window = self.param_tree.param.child("Data processing", "Moving Average").value()
@@ -205,9 +206,11 @@ class MainWindow(QMainWindow):
             else:
                 plot["widget"].setXLink(first_plot)
 
-    def update_adev_plot(self):
+    def update_adev_plot(self, measurement=None):
         df = self.influxdb_data
-        for measurement in df["_measurement"].unique():
+        measurement_list = df["_measurement"].unique() if measurement == None else [measurement]
+
+        for measurement in measurement_list:
             measurement_df = df[df["_measurement"] == measurement]
 
             time = pd.to_datetime(measurement_df["_time"]).to_numpy()
@@ -264,7 +267,7 @@ class MainWindow(QMainWindow):
             self.adev_widget.plots[measurement]["data"].setVisible(value)
 
         if option in ["Coeff_","Fractional_"]:
-            self.update_adev_plot()
+            self.update_adev_plot(measurement)
 
     def populate_presets(self):
         # Populate the content of the presets combobox based on the file in "presets"
@@ -300,11 +303,9 @@ class MainWindow(QMainWindow):
         filename = "presets/"+preset_name+"_tree.json"
         with open(filename, 'r') as openfile:
                 state = json.loads(openfile.read())
-        self.updating_region = True
-        self.params_changing = True
+        self.param_tree.params_changing = True
         self.param_tree.param.restoreState(state)
-        self.updating_region = False
-        self.params_changing = False
+        self.param_tree.params_changing = False
 
         # Update plots and table
         self.get_data()
