@@ -6,12 +6,17 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from influxdb_client import InfluxDBClient
 from tqdm import tqdm
+import re
 
 def load_config(config_path):
     """Load configuration from a JSON file."""
     try:
         with open(config_path, 'r') as f:
-            config = json.load(f)
+            content = f.read()
+            # Remove comments only when they start a line or follow whitespace
+            content = re.sub(r'^\s*//.*', '', content, flags=re.MULTILINE)
+            content = '\n'.join(line for line in content.splitlines() if line.strip())
+            config = json.loads(content)
         return config
     except FileNotFoundError:
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
@@ -54,6 +59,10 @@ class InfluxDBHandler:
         num_blocks = (total_duration//block_duration)+1
         current_start = start
 
+        # Testing
+        # self.db_df = pd.read_pickle("test_2.pkl") # Load
+        # return self.db_df
+
         iterator = tqdm(range(num_blocks), desc="Fetching data") if use_progress else range(num_blocks)
 
         df_list = []
@@ -75,7 +84,7 @@ class InfluxDBHandler:
             block_df = pd.DataFrame([vars(row) for row in fluxtable_json])
 
             # Convert _time column to datetime in UTC
-            block_df["_time"] = pd.to_datetime(block_df["_time"], utc=True)
+            block_df["_time"] = pd.to_datetime(block_df["_time"], format='mixed', utc=True)
 
             # Convert _time column to Europe/Paris timezone
             block_df["_time"] = block_df["_time"].dt.tz_convert("Europe/Paris")
@@ -87,7 +96,7 @@ class InfluxDBHandler:
         # Combine all chunks into the final DataFrame
         self.db_df = pd.concat(df_list, ignore_index=True)
 
-        # self.db_df.to_pickle("test.pkl") # Save
-        # self.db_df = pd.read_pickle("test.pkl") # Load
+        # Testing
+        # self.db_df.to_pickle("test_2.pkl") # Save
 
         return self.db_df
