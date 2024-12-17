@@ -86,7 +86,8 @@ class MainWindow(QMainWindow):
             self.get_data()
             self.update_table()
             self.update_temporal_plot()
-            self.update_adev_plot()
+            if self.param_tree.param.child("Data processing", "Allan deviation", "Auto calculate").value():
+                self.update_adev_plot()
 
         # Data processing
         if param.name() == 'Moving Average':
@@ -96,8 +97,11 @@ class MainWindow(QMainWindow):
             if param.name() == 'Zoom region':
                 self.zoom_region()
                 return
-            self.link_regions(param)
-            self.update_adev_plot()
+            if param.name() == 'Calculate':
+                self.update_adev_plot()
+                return
+            if param.name() in ["Start", "Stop", "Region size"]:
+                self.link_regions(param)
 
         # Presets
         if param.parent().name() == 'Presets':
@@ -173,7 +177,8 @@ class MainWindow(QMainWindow):
 
         self.param_tree.params_changing = False
 
-        self.update_adev_plot()
+        if self.param_tree.param.child("Data processing", "Allan deviation", "Auto calculate").value():
+            self.update_adev_plot()
 
     def update_temporal_plot(self):
         moving_avg_window = self.param_tree.param.child("Data processing", "Moving Average").value()
@@ -318,8 +323,9 @@ class MainWindow(QMainWindow):
         # Update plots and table
         self.get_data()
         self.update_temporal_plot()
-        self.update_adev_plot()
         self.link_regions(None)
+        if self.param_tree.param.child("Data processing", "Allan deviation", "Auto calculate").value():
+            self.update_adev_plot()
 
         self.update_table()
 
