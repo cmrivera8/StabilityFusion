@@ -67,6 +67,7 @@ class MainWindow(QMainWindow):
         area.addDock(dock_table,'bottom')
 
         # Connect signals
+        self.adev_widget.update_table.connect(self.update_adev_visibility)
         self.temp_widget.region_updated.connect(self.link_regions)
         self.data_table_widget.auto_value_request.connect(self.compute_auto_value)
         self.param_tree.param.sigTreeStateChanged.connect(self.param_change)
@@ -103,6 +104,24 @@ class MainWindow(QMainWindow):
             if param.name() in ["Start", "Stop", "Region size"]:
                 self.link_regions(param)
 
+        # Global settings
+        if param.parent().name() == 'Global settings':
+            plot_type = self.param_tree.param.child('Global settings','Plot type').value()
+            plots = self.temp_widget.plots if plot_type == "Temporal" else self.adev_widget.plots
+
+            plot_content = 'data' if plot_type == 'Allan deviation' else 'widget'
+            table_col = 'Plot_temp' if plot_type == 'Temporal' else 'Plot_adev'
+
+            if param.name() == 'Show all':
+                [plots[key][plot_content].setVisible(True) for key in plots.keys()]
+                self.table_df[table_col] = True
+            if param.name() == 'Hide all':
+                [plots[key][plot_content].setVisible(False) for key in plots.keys()]
+                self.table_df[table_col] = False
+
+            # Update table
+            self.update_table()
+
         # Presets
         if param.parent().name() == 'Presets':
             if param.name() == 'Name':
@@ -137,6 +156,10 @@ class MainWindow(QMainWindow):
                 True, # Plot_temp
                 True, # Plot_adev
                 ]
+
+    def update_adev_visibility(self, plot):
+        self.table_df.loc[self.table_df['Name'] == plot['data'].name(), "Plot_adev"] = plot["data"].isVisible()
+        self.update_table()
 
     def update_table(self):
         self.data_table_widget.update_table_from_dataframe()

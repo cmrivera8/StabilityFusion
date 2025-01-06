@@ -9,20 +9,25 @@ class ParameterTreeWidget(ParameterTree):
         params = [
             {'name': 'Data acquisition', 'type': 'group', 'children': [
                 {'name': 'Start', 'type': 'str', 'value': "2024-12-12 15:34:33"},
-                {'name': 'Stop', 'type': 'str', 'value': "2024-12-12 15:40:46"},
+                {'name': 'Stop', 'type': 'str', 'value': "2024-12-13 23:40:46"},
                 {'name': 'Get data', 'type': 'action'},
             ]},
             {'name': 'Data processing', 'type': 'group', 'children': [
                 {'name': 'Moving Average', 'type': 'int', 'value': 1},
                 {'name': 'Allan deviation', 'type': 'group', 'children': [
                     {'name': 'Start', 'type': 'str', 'value': "2024-12-12 15:34:33"},
-                    {'name': 'Stop', 'type': 'str', 'value': "2024-12-12 15:40:46"},
+                    {'name': 'Stop', 'type': 'str', 'value': "2024-12-13 23:40:46"},
                     {'name': 'Region size', 'type': 'str', 'value': "1000"},
                     {'name': 'Mode', 'type': 'list', 'value': 'Decade', 'limits': ['Decade','Octave','All']},
                     {'name': 'Auto calculate', 'type': 'bool'},
                     {'name': 'Calculate', 'type': 'action'},
                     {'name': 'Zoom region', 'type': 'action'},
                 ]},
+            ]},
+            {'name': 'Global settings', 'type': 'group', 'children': [
+                {'name': 'Plot type', 'type': 'list', 'value': 'Allan deviation', 'limits': ['Allan deviation','Temporal']},
+                {'name': 'Show all', 'type': 'action'},
+                {'name': 'Hide all', 'type': 'action'},
             ]},
             {'name': 'Presets', 'type': 'group', 'children': [
                 {'name': 'Name', 'type': 'list', 'value': 'Default', 'limits': ['Default','New']},

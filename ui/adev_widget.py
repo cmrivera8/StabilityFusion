@@ -1,7 +1,10 @@
 import pyqtgraph as pg
 import numpy as np
+from PyQt5.QtCore import pyqtSignal
 
 class AllanDeviationWidget(pg.GraphicsLayoutWidget):
+    update_table = pyqtSignal(object)
+
     def __init__(self):
         super().__init__()
         self.adev_widget = self.addPlot()
@@ -47,3 +50,6 @@ class AllanDeviationWidget(pg.GraphicsLayoutWidget):
         plot["error"].setVisible(plot["data"].isVisible())
         plot["widget"].enableAutoRange(axis='y')
         plot["widget"].setAutoVisible(y=True)
+
+        # Update table dataframe
+        self.update_table.emit(plot)
