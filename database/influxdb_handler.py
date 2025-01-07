@@ -88,11 +88,13 @@ class InfluxDBHandler:
 
             block_df = pd.DataFrame([vars(row) for row in fluxtable_json])
 
-            # Convert _time column to datetime in UTC
-            block_df["_time"] = pd.to_datetime(block_df["_time"], format='mixed', utc=True)
+            # Convert _start,_stop,_time columns to datetime in UTC
+            for col in ["_start", "_stop", "_time"]:
+                block_df[col] = pd.to_datetime(block_df[col], format='mixed', utc=True)
 
-            # Convert _time column to Europe/Paris timezone
-            block_df["_time"] = block_df["_time"].dt.tz_convert("Europe/Paris")
+            # Convert "_start", "_stop", "_time" columns to Europe/Paris timezone
+            for col in ["_start", "_stop", "_time"]:
+                block_df[col] = block_df[col].dt.tz_convert("Europe/Paris")
 
             df_list.append(block_df)
 
