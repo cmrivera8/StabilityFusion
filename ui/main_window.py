@@ -27,6 +27,8 @@ class MainWindow(QMainWindow):
         self.influxdb = influxdb
         self.influxdb_data_temp = None
         self.influxdb_data_adev = None
+        self.data_adev_availability = None
+
         self.setWindowTitle("StabilityFusion - by: Carlos RIVERA")
 
         # Docking widget
@@ -158,7 +160,6 @@ class MainWindow(QMainWindow):
         #
 
         self.influxdb_data_temp = self.influxdb.db_to_df(start, stop, avg_window)
-        self.influxdb_data_adev = self.influxdb_data_temp # Temporal solution
 
         influx_df = self.influxdb_data_temp
         measurements = influx_df["_measurement"].unique()
@@ -177,6 +178,12 @@ class MainWindow(QMainWindow):
                 True, # Plot_temp
                 True, # Plot_adev
                 ]
+
+        # Redefine adev data availability dataframe
+        self.data_adev_availability = pd.DataFrame({
+            'time': pd.date_range(start=start, end=stop, freq='1s'),
+            'saved': False
+        })
 
     def update_adev_visibility(self, plot):
         self.table_df.loc[self.table_df['Name'] == plot['data'].name(), "Plot_adev"] = plot["data"].isVisible()
@@ -253,14 +260,43 @@ class MainWindow(QMainWindow):
             plot = self.temp_widget.updateWidget(resample_time,avg_value,measurement)
 
             # Link x-axis
-            if first_plot == None:
-                first_plot = plot["widget"]
-            else:
-                plot["widget"].setXLink(first_plot)
+            plot["widget"].setXLink(self.temp_widget.coverage_widget)
+
+    def fetch_missing_adev_data(self, start: str, stop: str):
+        start -= timedelta(seconds=5)
+        stop += timedelta(seconds=5)
+
+        missing = self.data_adev_availability.query(
+            "time >= @start and time <= @stop and saved == False"
+        )
+
+        if not missing.empty:
+            # Fetch missing data
+            fetch_start = missing['time'].iloc[0] - timedelta(seconds=5)
+            fetch_stop = missing['time'].iloc[-1] + timedelta(seconds=5)
+            new_df = self.influxdb.db_to_df(fetch_start, fetch_stop)
+            self.influxdb_data_adev = pd.concat([self.influxdb_data_adev, new_df], ignore_index=True).sort_values(by='_time').drop_duplicates()
+
+            # Mark the region as saved
+            self.data_adev_availability.loc[self.data_adev_availability['time'].isin(missing['time']),'saved'] = True
+
+            # Plot availability
+            x = (self.data_adev_availability['time'].astype('int64')/1e9).to_numpy()
+            y = self.data_adev_availability['saved'].to_numpy()
+            self.temp_widget.coverage_plot.setData(x,y)
 
     def update_adev_plot(self, measurement=None):
+        start = self.string_to_date(self.param_tree.param.child("Data processing", "Allan deviation", "Start").value())
+        stop = self.string_to_date(self.param_tree.param.child("Data processing", "Allan deviation", "Stop").value())
+
+        # Check if requested range is contained
+        self.fetch_missing_adev_data(start, stop)
         df = self.influxdb_data_adev
+
         measurement_list = df["_measurement"].unique() if measurement == None else [measurement]
+        # Use timestamp
+        start = start.timestamp()
+        stop = stop.timestamp()
 
         for measurement in measurement_list:
             if self.adev_widget.plots.get(measurement) and not self.adev_widget.plots[measurement]['data'].isVisible():
@@ -269,13 +305,10 @@ class MainWindow(QMainWindow):
                 continue
             measurement_df = df[df["_measurement"] == measurement]
 
+            ## Allan deviation
             time = pd.to_datetime(measurement_df["_time"]).to_numpy()
             time = np.array([ts.timestamp() for ts in time])
             value = measurement_df["_value"].to_numpy()
-
-            ## Allan deviation
-            start = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Start")).timestamp()
-            stop = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Stop")).timestamp()
 
             region = np.where((time > start) & (time < stop))
             if np.size(region) == 0:

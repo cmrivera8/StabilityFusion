@@ -2,6 +2,7 @@ import pyqtgraph as pg
 from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout
 from PyQt5 import QtGui
 from PyQt5.QtCore import pyqtSignal
+import numpy as np
 
 class TemporalWidget(QScrollArea):
     region_updated = pyqtSignal(object)
@@ -23,6 +24,26 @@ class TemporalWidget(QScrollArea):
         self.setWidget(self.plot_container)
         self.setWidgetResizable(True)  # Enable resizing
         # self.setMinimumWidth(500)  # Set a minimum width for the scrollable area
+
+        # Add availability plot
+        self.coverage_widget = pg.PlotWidget(axisItems={'bottom': pg.DateAxisItem()})
+        self.coverage_widget.setMaximumHeight(25)
+        ## Hide ticks and labels
+        self.coverage_widget.getAxis('bottom').setTicks([])
+        self.coverage_widget.getAxis('left').setTicks([])
+        self.coverage_widget.getAxis('bottom').setStyle(showValues=False)
+        self.coverage_widget.getAxis('left').setStyle(showValues=False)
+
+        self.coverage_plot = self.coverage_widget.plot(
+                                [],
+                                [],
+                                pen=None,             # No line
+                                symbol=None,          # No symbols
+                                fillLevel=0,          # Fill down to y=0
+                                brush=(0, 255, 0, 150)  # Green color with some transparency
+                            )
+
+        self.plot_layout.addWidget(self.coverage_widget)
 
         self.plots = {}
 
