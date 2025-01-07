@@ -88,9 +88,10 @@ class MainWindow(QMainWindow):
 
         # Data acquisition
         if param.name() == 'Get data':
-            self.get_data()
+            start, stop = self.get_data()
             self.update_table()
             self.update_temporal_plot()
+            self.autoscale_x_axis(start, stop)
             if self.param_tree.param.child("Data processing", "Allan deviation", "Auto calculate").value():
                 self.update_adev_plot()
 
@@ -184,6 +185,14 @@ class MainWindow(QMainWindow):
             'time': pd.date_range(start=start, end=stop, freq='1s'),
             'saved': False
         })
+
+        return start, stop
+
+    def autoscale_x_axis(self, start, stop):
+        # Autoscale temporal plot
+        for plot in self.temp_widget.plots.values():
+            plot["widget"].setXRange(start.timestamp(),stop.timestamp())
+            plot["widget"].enableAutoRange(axis='x')
 
     def update_adev_visibility(self, plot):
         self.table_df.loc[self.table_df['Name'] == plot['data'].name(), "Plot_adev"] = plot["data"].isVisible()
@@ -401,8 +410,9 @@ class MainWindow(QMainWindow):
         self.param_tree.params_changing = False
 
         # Update plots and table
-        self.get_data()
+        start, stop = self.get_data()
         self.update_temporal_plot()
+        self.autoscale_x_axis(start, stop)
         self.link_regions(None)
         if self.param_tree.param.child("Data processing", "Allan deviation", "Auto calculate").value():
             self.update_adev_plot()
