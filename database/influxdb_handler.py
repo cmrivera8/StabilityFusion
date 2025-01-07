@@ -3,7 +3,6 @@ import pandas as pd
 from pathlib import Path
 from types import SimpleNamespace
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 from influxdb_client import InfluxDBClient
 from tqdm import tqdm
 import re
@@ -41,17 +40,7 @@ class InfluxDBHandler:
         fluxtable_json = json.loads(fluxtable.to_json(), object_hook=lambda d: SimpleNamespace(**d))
         return fluxtable_json
 
-    def db_to_df(self, start, stop):
-        def string_to_date(date_str):
-            # From string to local timezone
-            dt = datetime.fromisoformat(date_str).replace(tzinfo=ZoneInfo("Europe/Paris"))
-            # From local datetime to UTC
-            dt = dt.astimezone(ZoneInfo("UTC"))
-            return dt
-
-        start = string_to_date(start)
-        stop = string_to_date(stop)
-
+    def db_to_df(self, start: datetime, stop: datetime, avg_window=None):
         # Divide request in 1h blocks
         block_duration = timedelta(hours=1)
         total_duration = stop-start
@@ -60,7 +49,7 @@ class InfluxDBHandler:
         current_start = start
 
         # Testing
-        # self.db_df = pd.read_pickle("test_2.pkl") # Load
+        # self.db_df = pd.read_pickle("test.pkl") # Load
         # return self.db_df
 
         iterator = tqdm(range(num_blocks), desc="Fetching data") if use_progress else range(num_blocks)
@@ -73,13 +62,29 @@ class InfluxDBHandler:
             start_str = current_start.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             stop_str = current_stop.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
+            if start_str == stop_str:
+                continue
+
             query = """
             import "date"
             from(bucket: "{db_bucket}")
                 |> range(start: {start}, stop: {stop})
             """.format(db_bucket=self.bucket, start=start_str, stop=stop_str)
 
+            # Apply moving average window
+            if avg_window:
+                query += f"""
+                    |> timedMovingAverage(every: {avg_window}s, period: {avg_window}s)
+                """
+            #
+
             fluxtable_json = self.flux_to_points_obj(self.query_api.query(query, org=self.org))
+
+            # Skip empty blocks
+            if len(fluxtable_json) == 0:
+                current_start = current_stop
+                continue
+            #
 
             block_df = pd.DataFrame([vars(row) for row in fluxtable_json])
 

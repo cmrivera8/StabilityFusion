@@ -4,6 +4,7 @@ from pyqtgraph.dockarea import *
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import copy
 import os
 import json
@@ -24,7 +25,8 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.influxdb = influxdb
-        self.influxdb_data = None
+        self.influxdb_data_temp = None
+        self.influxdb_data_adev = None
         self.setWindowTitle("StabilityFusion - by: Carlos RIVERA")
 
         # Docking widget
@@ -135,13 +137,32 @@ class MainWindow(QMainWindow):
             if param.name() == 'Remove':
                 self.remove_preset()
 
+    def string_to_date(self, date_str):
+        # From string to local timezone
+        dt = datetime.fromisoformat(date_str).replace(tzinfo=ZoneInfo("Europe/Paris"))
+        # From local datetime to UTC
+        dt = dt.astimezone(ZoneInfo("UTC"))
+        return dt
+
     def get_data(self):
         start = self.param_tree.param.child("Data acquisition", "Start").value()
         stop = self.param_tree.param.child("Data acquisition", "Stop").value()
-        self.influxdb_data = self.influxdb.db_to_df(start, stop)
 
-        influx_df = self.influxdb_data
+        # String to datetime
+        start = self.string_to_date(start)
+        stop = self.string_to_date(stop)
+        #
+
+        # Calculate moving average window
+        avg_window = int((stop.timestamp()-start.timestamp())/1000)
+        #
+
+        self.influxdb_data_temp = self.influxdb.db_to_df(start, stop, avg_window)
+        self.influxdb_data_adev = self.influxdb_data_temp # Temporal solution
+
+        influx_df = self.influxdb_data_temp
         measurements = influx_df["_measurement"].unique()
+        measurements.sort()
         for measurement in measurements:
             # Check if row exists
             if self.table_df["Name"].eq(measurement).any():
@@ -205,9 +226,12 @@ class MainWindow(QMainWindow):
 
     def update_temporal_plot(self):
         moving_avg_window = self.param_tree.param.child("Data processing", "Moving Average").value()
-        df = self.influxdb_data
+        df = self.influxdb_data_temp
         first_plot = None
-        for measurement in df["_measurement"].unique():
+
+        measurements = df["_measurement"].unique()
+        measurements.sort()
+        for measurement in measurements:
             measurement_df = df[df["_measurement"] == measurement]
 
             time = pd.to_datetime(measurement_df["_time"]).to_numpy()
@@ -235,7 +259,7 @@ class MainWindow(QMainWindow):
                 plot["widget"].setXLink(first_plot)
 
     def update_adev_plot(self, measurement=None):
-        df = self.influxdb_data
+        df = self.influxdb_data_adev
         measurement_list = df["_measurement"].unique() if measurement == None else [measurement]
 
         for measurement in measurement_list:
@@ -377,7 +401,7 @@ class MainWindow(QMainWindow):
                 self.save_preset()
 
     def db_data_to_array(self, measurement):
-        df = self.influxdb_data
+        df = self.influxdb_data_adev
         measurement_df = df[df["_measurement"] == measurement]
 
         time = pd.to_datetime(measurement_df["_time"]).to_numpy()
