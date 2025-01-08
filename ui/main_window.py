@@ -89,6 +89,7 @@ class MainWindow(QMainWindow):
         # Data acquisition
         if param.name() == 'Get data':
             start, stop = self.get_data()
+            self.populate_main_measurement()
             self.update_table()
             self.update_temporal_plot()
             self.autoscale_x_axis(start, stop)
@@ -371,6 +372,13 @@ class MainWindow(QMainWindow):
         if option in ["Coeff_","Fractional_"]:
             self.update_adev_plot(measurement)
 
+    def populate_main_measurement(self):
+        # From the fetched data, fill the combobox that defines the main measurement
+        combobox = self.param_tree.param.child('Global settings', 'Main measurement')
+
+        content = self.influxdb_data_temp['_measurement'].unique()
+        combobox.setLimits(content)
+
     def populate_presets(self):
         # Populate the content of the presets combobox based on the file in "presets"
         combobox = self.param_tree.param.child("Presets", "Name")
@@ -411,6 +419,7 @@ class MainWindow(QMainWindow):
 
         # Update plots and table
         start, stop = self.get_data()
+        self.populate_main_measurement()
         self.update_temporal_plot()
         self.autoscale_x_axis(start, stop)
         self.link_regions(None)
@@ -473,8 +482,10 @@ class MainWindow(QMainWindow):
         widget = self.data_table_widget.cellWidget(row, col)
 
         # Use region
+        main_measurement = self.param_tree.param.child('Global settings', 'Main measurement').value()
+
         param_ts, param_val = self.db_data_to_array(measurement)
-        freq_ts, freq_val = self.db_data_to_array("counter")
+        freq_ts, freq_val = self.db_data_to_array(main_measurement)
         #
 
         if item_type == "Coeff_":

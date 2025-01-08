@@ -8,15 +8,15 @@ class ParameterTreeWidget(ParameterTree):
 
         params = [
             {'name': 'Data acquisition', 'type': 'group', 'children': [
-                {'name': 'Start', 'type': 'str', 'value': "2024-12-12 15:34:33"},
-                {'name': 'Stop', 'type': 'str', 'value': "2024-12-13 23:40:46"},
+                {'name': 'Start', 'type': 'str', 'value': "2025-01-07 17:00:00"},
+                {'name': 'Stop', 'type': 'str', 'value': "2025-01-07 18:00:00"},
                 {'name': 'Get data', 'type': 'action'},
             ]},
             {'name': 'Data processing', 'type': 'group', 'children': [
                 {'name': 'Moving Average', 'type': 'int', 'value': 1},
                 {'name': 'Allan deviation', 'type': 'group', 'children': [
-                    {'name': 'Start', 'type': 'str', 'value': "2024-12-12 15:34:33"},
-                    {'name': 'Stop', 'type': 'str', 'value': "2024-12-13 23:40:46"},
+                    {'name': 'Start', 'type': 'str', 'value': "2025-01-07 02:58:32"},
+                    {'name': 'Stop', 'type': 'str', 'value': "2025-01-07 03:15:12"},
                     {'name': 'Region size', 'type': 'str', 'value': "1000"},
                     {'name': 'Mode', 'type': 'list', 'value': 'Decade', 'limits': ['Decade','Octave','All']},
                     {'name': 'Auto calculate', 'type': 'bool'},
@@ -25,6 +25,7 @@ class ParameterTreeWidget(ParameterTree):
                 ]},
             ]},
             {'name': 'Global settings', 'type': 'group', 'children': [
+                {'name': 'Main measurement', 'type': 'list', 'value': '', 'limits': ['']},
                 {'name': 'Plot type', 'type': 'list', 'value': 'Allan deviation', 'limits': ['Allan deviation','Temporal']},
                 {'name': 'Show all', 'type': 'action'},
                 {'name': 'Hide all', 'type': 'action'},
