@@ -11,6 +11,7 @@ import json
 from engineering_notation import EngNumber
 from scipy.stats import linregress
 from tqdm import tqdm
+from datemath import datemath
 
 from ui.parameter_tree import ParameterTreeWidget
 from ui.temporal_widget import TemporalWidget
@@ -150,9 +151,19 @@ class MainWindow(QMainWindow):
         dt = dt.astimezone(ZoneInfo("UTC"))
         return dt
 
+    def date_math(self, param):
+        if any([val in param for val in ['y', 'Y', 'M', 'm', 'd', 'D', 'w', 'h', 'H', 's', 'S', 'now']]):
+            param = str(datemath(param).replace(tzinfo=ZoneInfo("Europe/Paris")))
+        return param
+
     def get_data(self):
         start = self.param_tree.param.child("Data acquisition", "Start").value()
         stop = self.param_tree.param.child("Data acquisition", "Stop").value()
+
+        # Process natural language date information
+        start = self.date_math(start)
+        stop = self.date_math(stop)
+        #
 
         # String to datetime
         start = self.string_to_date(start)

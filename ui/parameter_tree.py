@@ -8,8 +8,8 @@ class ParameterTreeWidget(ParameterTree):
 
         params = [
             {'name': 'Data acquisition', 'type': 'group', 'children': [
-                {'name': 'Start', 'type': 'str', 'value': "2025-01-07 17:00:00"},
-                {'name': 'Stop', 'type': 'str', 'value': "2025-01-07 18:00:00"},
+                {'name': 'Start', 'type': 'str', 'value': "now-1h"},
+                {'name': 'Stop', 'type': 'str', 'value': "now"},
                 {'name': 'Get data', 'type': 'action'},
             ]},
             {'name': 'Data processing', 'type': 'group', 'children': [

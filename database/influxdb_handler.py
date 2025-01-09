@@ -61,7 +61,7 @@ class InfluxDBHandler:
                 |> filter(fn: (r) => contains(value: r._measurement, set: {str(measurement).replace("\n","").replace("\'","\"")}))
             """
 
-        iterator = tqdm(range(num_blocks), desc="Fetching data") if use_progress else range(num_blocks)
+        iterator = tqdm(range(num_blocks), desc="Fetching data (hours)") if use_progress else range(num_blocks)
 
         df_list = []
 
