@@ -10,6 +10,7 @@ import os
 import json
 from engineering_notation import EngNumber
 from scipy.stats import linregress
+from tqdm import tqdm
 
 from ui.parameter_tree import ParameterTreeWidget
 from ui.temporal_widget import TemporalWidget
@@ -27,7 +28,7 @@ class MainWindow(QMainWindow):
         self.influxdb = influxdb
         self.influxdb_data_temp = None
         self.influxdb_data_adev = None
-        self.data_adev_availability = None
+        self.data_adev_availability_dct = None
 
         self.setWindowTitle("StabilityFusion - by: Carlos RIVERA")
 
@@ -183,10 +184,13 @@ class MainWindow(QMainWindow):
                 ]
 
         # Redefine adev data availability dataframe
-        self.data_adev_availability = pd.DataFrame({
-            'time': pd.date_range(start=start, end=stop, freq='1s'),
-            'saved': False
-        })
+        self.data_adev_availability_dct = {
+            measurement : pd.DataFrame({
+                            'time': pd.date_range(start=start, end=stop, freq='1s'),
+                            'saved': False
+                            })
+        for measurement in measurements
+        }
 
         # Return start, stop in UTC
         # return start, stop
@@ -308,10 +312,6 @@ class MainWindow(QMainWindow):
         start -= timedelta(seconds=5)
         stop += timedelta(seconds=5)
 
-        missing = self.data_adev_availability.query(
-            "time >= @start and time <= @stop and saved == False"
-        )
-
         # Fetch data of only visible traces
         measurement_list = self.table_df.loc[self.table_df['Plot_adev'] == True, 'Name'].values
 
@@ -319,20 +319,29 @@ class MainWindow(QMainWindow):
             print("No ADev traces visible.")
             return
 
-        if not missing.empty:
-            # Fetch missing data
-            fetch_start = missing['time'].iloc[0] - timedelta(seconds=5)
-            fetch_stop = missing['time'].iloc[-1] + timedelta(seconds=5)
-            new_df = self.influxdb.db_to_df(fetch_start, fetch_stop, measurement=measurement_list)
-            self.influxdb_data_adev = pd.concat([self.influxdb_data_adev, new_df], ignore_index=True).sort_values(by='_time').drop_duplicates()
+        for measurement in (pbar := tqdm(measurement_list)):
+            pbar.set_description("Fetching '{}' data.".format(measurement))
 
-            # Mark the region as saved
-            self.data_adev_availability.loc[self.data_adev_availability['time'].isin(missing['time']),'saved'] = True
+            df = self.data_adev_availability_dct[measurement]
 
-            # Plot availability
-            x = (self.data_adev_availability['time'].astype('int64')/1e9).to_numpy()
-            y = self.data_adev_availability['saved'].to_numpy()
-            self.temp_widget.coverage_plot.setData(x,y)
+            missing = df.query(
+            "time >= @start and time <= @stop and saved == False"
+            )
+
+            if not missing.empty:
+                # Fetch missing data
+                fetch_start = missing['time'].iloc[0] - timedelta(seconds=5)
+                fetch_stop = missing['time'].iloc[-1] + timedelta(seconds=5)
+                new_df = self.influxdb.db_to_df(fetch_start, fetch_stop, measurement=measurement)
+                self.influxdb_data_adev = pd.concat([self.influxdb_data_adev, new_df], ignore_index=True).sort_values(by='_time').drop_duplicates()
+
+                # Mark the region as saved
+                df.loc[df['time'].isin(missing['time']),['name','saved']] = [measurement, True]
+
+                # Plot availability
+                x = (df['time'].astype('int64')/1e9).to_numpy()
+                y = df['saved'].to_numpy()
+                self.temp_widget.coverage_plot.setData(x,y)
 
     def update_adev_plot(self, measurement=None):
         start = self.string_to_date(self.param_tree.param.child("Data processing", "Allan deviation", "Start").value())
@@ -347,7 +356,10 @@ class MainWindow(QMainWindow):
         start = start.timestamp()
         stop = stop.timestamp()
 
-        for measurement in measurement_list:
+        # for measurement in measurement_list:
+        for measurement in (pbar := tqdm(measurement_list)):
+            pbar.set_description("Calculating ADev for '{}'.".format(measurement))
+
             if self.adev_widget.plots.get(measurement) and not self.adev_widget.plots[measurement]['data'].isVisible():
                 # Skip and mark as "to be updated" (to be updated when it becomes visible)
                 self.adev_widget.plots[measurement]['to_be_updated'] = True

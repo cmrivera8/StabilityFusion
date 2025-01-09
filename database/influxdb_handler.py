@@ -55,8 +55,10 @@ class InfluxDBHandler:
         # Define measurements to be fetched
         measurement_query = None
         if not measurement is None:
+            if isinstance(measurement, str):
+                measurement = [measurement]
             measurement_query = f"""
-                |> filter(fn: (r) => contains(value: r._measurement, set: {str(measurement.tolist()).replace("\n","").replace("\'","\"")}))
+                |> filter(fn: (r) => contains(value: r._measurement, set: {str(measurement).replace("\n","").replace("\'","\"")}))
             """
 
         iterator = tqdm(range(num_blocks), desc="Fetching data") if use_progress else range(num_blocks)
