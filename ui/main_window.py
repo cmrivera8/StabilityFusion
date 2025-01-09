@@ -92,6 +92,7 @@ class MainWindow(QMainWindow):
             self.populate_main_measurement()
             self.update_table()
             self.update_temporal_plot()
+            self.autoset_region(start,stop)
             self.autoscale_x_axis(start, stop)
             if self.param_tree.param.child("Data processing", "Allan deviation", "Auto calculate").value():
                 self.update_adev_plot()
@@ -166,7 +167,7 @@ class MainWindow(QMainWindow):
         influx_df = self.influxdb_data_temp
         measurements = influx_df["_measurement"].unique()
         measurements.sort()
-        for measurement in measurements:
+        for i, measurement in enumerate(measurements):
             # Check if row exists
             if self.table_df["Name"].eq(measurement).any():
                 continue
@@ -178,7 +179,7 @@ class MainWindow(QMainWindow):
                 1, # Coeff_
                 1, # Fractional_
                 True, # Plot_temp
-                True, # Plot_adev
+                True if i == 0 else False, # Plot_adev (first one is visible)
                 ]
 
         # Redefine adev data availability dataframe
@@ -187,7 +188,38 @@ class MainWindow(QMainWindow):
             'saved': False
         })
 
+        # Return start, stop in UTC
+        # return start, stop
+
+        # Return start,stop in Paris,Europe
+        start = start.astimezone(ZoneInfo("Europe/Paris"))
+        stop = stop.astimezone(ZoneInfo("Europe/Paris"))
         return start, stop
+
+    def autoset_region(self, start, stop):
+        # Parameters
+        region_param = self.param_tree.param.child("Data processing", "Allan deviation", "Region size")
+        start_param = self.param_tree.param.child("Data processing", "Allan deviation", "Start")
+
+        # Only auto-set if the region is currently outside the limits of the fetched data
+        region = list(self.temp_widget.plots.values())[0]['region'].getRegion()
+        region_start = region[0]
+        region_stop = region[1]
+
+        # Skip is region is already within the data
+        if (start.timestamp() < region_start) and (stop.timestamp() > region_stop):
+            return
+
+        # When new data fetched, make a 10% or 1h size region in the center
+        new_start = str((start + (stop-start)/2)).split("+")[0]
+        start_param.setValue(new_start)
+
+        # Convert to timestamp
+        start = start.timestamp()
+        stop = stop.timestamp()
+
+        region_size = min((stop-start)*0.1, 3600)
+        region_param.setValue(region_size)
 
     def autoscale_x_axis(self, start, stop):
         # Autoscale temporal plot
@@ -272,7 +304,7 @@ class MainWindow(QMainWindow):
             # Link x-axis
             plot["widget"].setXLink(self.temp_widget.coverage_widget)
 
-    def fetch_missing_adev_data(self, start: str, stop: str):
+    def fetch_missing_adev_data(self, start: datetime, stop: datetime):
         start -= timedelta(seconds=5)
         stop += timedelta(seconds=5)
 
