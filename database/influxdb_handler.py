@@ -40,7 +40,7 @@ class InfluxDBHandler:
         fluxtable_json = json.loads(fluxtable.to_json(), object_hook=lambda d: SimpleNamespace(**d))
         return fluxtable_json
 
-    def db_to_df(self, start: datetime, stop: datetime, avg_window=None):
+    def db_to_df(self, start: datetime, stop: datetime, avg_window=None, measurement=None):
         # Divide request in 1h blocks
         block_duration = timedelta(hours=1)
         total_duration = stop-start
@@ -51,6 +51,13 @@ class InfluxDBHandler:
         # Testing
         # self.db_df = pd.read_pickle("test.pkl") # Load
         # return self.db_df
+
+        # Define measurements to be fetched
+        measurement_query = None
+        if not measurement is None:
+            measurement_query = f"""
+                |> filter(fn: (r) => contains(value: r._measurement, set: {str(measurement.tolist()).replace("\n","").replace("\'","\"")}))
+            """
 
         iterator = tqdm(range(num_blocks), desc="Fetching data") if use_progress else range(num_blocks)
 
@@ -70,6 +77,10 @@ class InfluxDBHandler:
             from(bucket: "{db_bucket}")
                 |> range(start: {start}, stop: {stop})
             """.format(db_bucket=self.bucket, start=start_str, stop=stop_str)
+
+            # Fetch specific measurements
+            if not measurement_query is None:
+                query += measurement_query
 
             # Apply moving average window
             if avg_window:

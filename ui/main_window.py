@@ -280,11 +280,18 @@ class MainWindow(QMainWindow):
             "time >= @start and time <= @stop and saved == False"
         )
 
+        # Fetch data of only visible traces
+        measurement_list = self.table_df.loc[self.table_df['Plot_adev'] == True, 'Name'].values
+
+        if len(measurement_list.tolist()) == 0:
+            print("No ADev traces visible.")
+            return
+
         if not missing.empty:
             # Fetch missing data
             fetch_start = missing['time'].iloc[0] - timedelta(seconds=5)
             fetch_stop = missing['time'].iloc[-1] + timedelta(seconds=5)
-            new_df = self.influxdb.db_to_df(fetch_start, fetch_stop)
+            new_df = self.influxdb.db_to_df(fetch_start, fetch_stop, measurement=measurement_list)
             self.influxdb_data_adev = pd.concat([self.influxdb_data_adev, new_df], ignore_index=True).sort_values(by='_time').drop_duplicates()
 
             # Mark the region as saved
