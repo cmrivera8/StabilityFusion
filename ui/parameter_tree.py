@@ -18,6 +18,7 @@ class ParameterTreeWidget(ParameterTree):
                     {'name': 'Start', 'type': 'str', 'value': "2025-01-07 02:58:32"},
                     {'name': 'Stop', 'type': 'str', 'value': "2025-01-07 03:15:12"},
                     {'name': 'Region size', 'type': 'str', 'value': "1000"},
+                    {'name': 'Initial tau (s)', 'type': 'str', 'value': ""},
                     {'name': 'Mode', 'type': 'list', 'value': 'Decade', 'limits': ['Decade','Octave','All']},
                     {'name': 'Auto calculate', 'type': 'bool'},
                     {'name': 'Calculate', 'type': 'action'},
