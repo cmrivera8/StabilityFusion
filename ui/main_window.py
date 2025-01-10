@@ -198,7 +198,8 @@ class MainWindow(QMainWindow):
         self.data_adev_availability_dct = {
             measurement : pd.DataFrame({
                             'time': pd.date_range(start=start, end=stop, freq='1s'),
-                            'saved': False
+                            'saved': False,
+                            'avg_window': ""
                             })
         for measurement in measurements
         }
@@ -331,28 +332,56 @@ class MainWindow(QMainWindow):
             return
 
         for measurement in (pbar := tqdm(measurement_list)):
-            pbar.set_description("Fetching '{}' data.".format(measurement))
+            pbar.set_description("Using cached data for '{}'.".format(measurement))
 
-            df = self.data_adev_availability_dct[measurement]
+            df_avail = self.data_adev_availability_dct[measurement]
+            df_adev = self.influxdb_data_adev
 
-            missing = df.query(
+            avg_window = self.param_tree.param.child('Data processing', 'Allan deviation', 'Initial tau (s)').value()
+
+            # If the average window size changed, force fetch operation
+            region_availability = df_avail.query("time >= @start and time <= @stop")
+            region_availability_win = region_availability['avg_window'].unique()
+
+            if (len(region_availability_win) != 1) or (region_availability_win != avg_window):
+
+                # If the avg window changed, fetch the selected data (keep previously fetched data) - Not used
+                # df_avail.loc[(df_avail['time'] >= start) & (df_avail['time'] <= stop), 'saved'] = False # Replace only selected data
+                # df_adev = df_adev.drop((df_adev.loc[(df_adev['_time'] >= start) & (df_adev['_time'] <= stop) & (df_adev['_measurement'] == measurement)]).index) # Drop selected data
+
+                # If the avg window changed, start fresh - Preferred version.
+                df_avail.loc[df_avail.index, 'saved'] = False  # Replace all
+                df_adev = df_adev.drop(df_adev.index) # Drop all
+
+            missing = df_avail.query(
             "time >= @start and time <= @stop and saved == False"
             )
 
             if not missing.empty:
+                pbar.set_description("Fetching '{}' data.".format(measurement))
+
                 # Fetch missing data
                 fetch_start = missing['time'].iloc[0] - timedelta(seconds=5)
                 fetch_stop = missing['time'].iloc[-1] + timedelta(seconds=5)
-                new_df = self.influxdb.db_to_df(fetch_start, fetch_stop, measurement=measurement)
-                self.influxdb_data_adev = pd.concat([self.influxdb_data_adev, new_df], ignore_index=True).sort_values(by='_time').drop_duplicates()
+
+                avg_window_fetch = int(avg_window) if not avg_window == "" else None
+
+                new_df = self.influxdb.db_to_df(fetch_start, fetch_stop, measurement=measurement, avg_window=avg_window_fetch)
+
+                df_adev = pd.concat([df_adev, new_df], ignore_index=True).sort_values(by='_time').drop_duplicates()
 
                 # Mark the region as saved
-                df.loc[df['time'].isin(missing['time']),['name','saved']] = [measurement, True]
+                df_avail.loc[df_avail['time'].isin(missing['time']),['name','saved','avg_window']] = [measurement, True, str(avg_window)]
 
                 # Plot availability
-                x = (df['time'].astype('int64')/1e9).to_numpy()
-                y = df['saved'].to_numpy()
+                x = (df_avail['time'].astype('int64')/1e9).to_numpy()
+                y = df_avail['saved'].to_numpy()
                 self.temp_widget.coverage_plot.setData(x,y)
+
+                # Apply Dataframe changes
+                self.influxdb_data_adev = df_adev
+                self.data_adev_availability_dct[measurement] = df_avail
+
 
     def update_adev_plot(self, measurement=None):
         start = self.string_to_date(self.param_tree.param.child("Data processing", "Allan deviation", "Start").value())
