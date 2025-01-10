@@ -153,7 +153,7 @@ class MainWindow(QMainWindow):
 
     def date_math(self, param):
         if any([val in param for val in ['y', 'Y', 'M', 'm', 'd', 'D', 'w', 'h', 'H', 's', 'S', 'now']]):
-            param = str(datemath(param).replace(tzinfo=ZoneInfo("Europe/Paris")))
+            param = str(datemath(param).replace(tzinfo=ZoneInfo("Europe/Paris")).strftime("%Y-%m-%dT%H:%M:%S"))
         return param
 
     def get_data(self):
@@ -233,7 +233,7 @@ class MainWindow(QMainWindow):
         start = start.timestamp()
         stop = stop.timestamp()
 
-        region_size = min((stop-start)*0.1, 3600)
+        region_size = (stop-start)*0.1 # 10% of the data
         region_param.setValue(region_size)
 
     def autoscale_x_axis(self, start, stop):
@@ -425,6 +425,11 @@ class MainWindow(QMainWindow):
             self.temp_widget.plots[measurement]["widget"].setVisible(value)
 
         if option == "Plot_adev":
+            # Check if the plot exists, if not, create it
+            if not self.adev_widget.plots.get(measurement):
+                self.update_adev_plot(measurement)
+                return
+
             self.adev_widget.plots[measurement]["data"].setVisible(value)
             if self.adev_widget.plots[measurement].get("to_be_updated") and self.adev_widget.plots[measurement]["to_be_updated"]:
                 # Update was skipped when it was hidden
