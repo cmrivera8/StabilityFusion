@@ -320,6 +320,13 @@ class MainWindow(QMainWindow):
             # Link x-axis
             plot["widget"].setXLink(self.temp_widget.coverage_widget)
 
+    def update_availability_plot(self, measurement):
+        df_avail = self.data_adev_availability_dct[measurement]
+
+        x = (df_avail['time'].astype('int64')/1e9).to_numpy()
+        y = df_avail['saved'].to_numpy()
+        self.temp_widget.update_availability_plot(x, y, measurement)
+
     def fetch_missing_adev_data(self, start: datetime, stop: datetime):
         start -= timedelta(seconds=5)
         stop += timedelta(seconds=5)
@@ -374,9 +381,7 @@ class MainWindow(QMainWindow):
                 df_avail.loc[df_avail['time'].isin(missing['time']),['name','saved','avg_window']] = [measurement, True, str(avg_window)]
 
                 # Plot availability
-                x = (df_avail['time'].astype('int64')/1e9).to_numpy()
-                y = df_avail['saved'].to_numpy()
-                self.temp_widget.coverage_plot.setData(x,y)
+                self.update_availability_plot(measurement)
 
                 # Apply Dataframe changes
                 self.influxdb_data_adev = df_adev

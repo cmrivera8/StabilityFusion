@@ -117,7 +117,7 @@ class DataTableWidget(QTableWidget):
                 def compute_auto_value():
                     return 88
 
-                if isinstance(value, np.bool):
+                if isinstance(value, np.bool_):
                     item = QTableWidgetItem()
                     item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
                     item.setCheckState(Qt.Checked if value else Qt.Unchecked)

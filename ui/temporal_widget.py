@@ -34,18 +34,38 @@ class TemporalWidget(QScrollArea):
         self.coverage_widget.getAxis('bottom').setStyle(showValues=False)
         self.coverage_widget.getAxis('left').setStyle(showValues=False)
 
-        self.coverage_plot = self.coverage_widget.plot(
-                                [],
-                                [],
-                                pen=None,             # No line
-                                symbol=None,          # No symbols
-                                fillLevel=0,          # Fill down to y=0
-                                brush=(0, 255, 0, 150)  # Green color with some transparency
-                            )
-
         self.plot_layout.addWidget(self.coverage_widget)
 
         self.plots = {}
+        self.avail_curves = {}
+
+    def update_availability_plot(self, x, y, measurement):
+        def replace_by_nan(arr):
+            return np.where(arr == False, np.nan, arr)
+
+        # Check if curve exists
+        if measurement in self.avail_curves:
+            index = self.avail_curves[measurement].index
+            self.avail_curves[measurement].setData(x,replace_by_nan(y)+index)
+            return self.avail_curves[measurement]
+
+        ## Create new curve
+        color = self.plots[measurement]["data"].opts['pen'].color()
+
+        plot_curve = self.coverage_widget.plot(
+            [],
+            [],
+            pen={'color': color, 'width': 3},  # Set line color and thickness
+            symbol=None,  # No symbols
+        )
+
+        plot_curve.index = len(self.avail_curves.items())
+
+        self.avail_curves[measurement] = plot_curve
+
+        # SetData recursively
+        self.update_availability_plot(x, y, measurement)
+
 
     def updateWidget(self, x, y, title="Plot"):
         # Check if the plots already exists
