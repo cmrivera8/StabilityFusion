@@ -3,7 +3,7 @@ authors = ["cmrivera8 <carlos.rivera8528@hotmail.com>"]
 channels = ["conda-forge"]
 description = "Tool for analyzing stability and evaluating the contributions of experimental parameters."
 name = "StabilityFusion"
-platforms = ["win-64"]
+platforms = ["win-64", "linux-64"]
 version = "0.1.0"
 
 [tasks]

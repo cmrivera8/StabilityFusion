@@ -114,7 +114,7 @@ class InfluxDBHandler:
             current_start = current_stop
 
         # Combine all chunks into the final DataFrame
-        self.db_df = pd.concat(df_list, ignore_index=True)
+        self.db_df = pd.concat(df_list, ignore_index=True) if len(df_list) != 0 else None
 
         # Testing
         # self.db_df.to_pickle("test_2.pkl") # Save

@@ -29,7 +29,7 @@ class MainWindow(QMainWindow):
         self.influxdb = influxdb
         self.influxdb_data_temp = None
         self.influxdb_data_adev = None
-        self.data_adev_availability_dct = None
+        self.data_avail_dct = {}
 
         self.setWindowTitle("StabilityFusion - by: Carlos RIVERA")
 
@@ -90,12 +90,12 @@ class MainWindow(QMainWindow):
 
         # Data acquisition
         if param.name() == 'Get data':
-            start, stop = self.get_data()
+            self.get_temporal_data()
             self.populate_main_measurement()
             self.update_table()
             self.update_temporal_plot()
-            self.autoset_region(start,stop)
-            self.autoscale_x_axis(start, stop)
+            self.autoset_region()
+            self.autoscale_x_axis()
             if self.param_tree.param.child("Data processing", "Allan deviation", "Auto calculate").value():
                 self.update_adev_plot()
 
@@ -153,10 +153,101 @@ class MainWindow(QMainWindow):
 
     def date_math(self, param):
         if any([val in param for val in ['y', 'Y', 'M', 'm', 'd', 'D', 'w', 'h', 'H', 's', 'S', 'now']]):
-            param = str(datemath(param).replace(tzinfo=ZoneInfo("Europe/Paris")).strftime("%Y-%m-%dT%H:%M:%S"))
+            param = str(
+                datemath(param)
+                    .astimezone(ZoneInfo("Europe/Paris")) # From UTC to Paris
+                    .strftime("%Y-%m-%dT%H:%M:%S") # From datetime to string
+                )
         return param
 
-    def get_data(self):
+    def smart_fetch(self, start: datetime, end: datetime, measurement_list, avg_window, mode, main_df):
+        # Helper functions
+        def extend_limits(start,end):
+            # Extend the range and round to the nearest hour
+            adjusted_start = (start - pd.Timedelta(minutes=60)).replace(minute=0, second=0, microsecond=0)
+            adjusted_end = (end + pd.Timedelta(minutes=60)).replace(minute=0, second=0, microsecond=0)
+            return adjusted_start, adjusted_end
+
+        def create_avail_df(start,end):
+            df = pd.DataFrame(
+                {
+                    'time': pd.date_range(start=start, end=end, freq='1s'),
+                    'cached': False,
+                    'avg_window': ""
+                })
+            return df
+
+        def extend_avail_df(start,end,existing_df):
+            new_df = create_avail_df(start,end)
+            new_df = pd.concat([existing_df, new_df], ignore_index=True)
+            new_df = new_df.sort_values(by='time').drop_duplicates(subset='time', keep='first')
+            return new_df
+
+        def range_between_df(start,end,df):
+            return all(create_avail_df(start, end)['time'].between(df['time'].min(),df['time'].max()))
+
+        # Create dictionary per mode and measurement
+        if not mode in self.data_avail_dct.keys():
+            self.data_avail_dct[mode] = {}
+
+        for measurement in (pbar := tqdm(measurement_list)):
+            # Add measurement to the dictionary if it doesn't exist
+            if not measurement in self.data_avail_dct[mode].keys():
+                adjusted_start, adjusted_end = extend_limits(start,end)
+                self.data_avail_dct[mode][measurement] = create_avail_df(adjusted_start,adjusted_end)
+
+            # Define dataframes shorter name
+            df_avail = self.data_avail_dct[mode][measurement]
+
+            # Is the requested range within the dataframe limits? if not, extend the dataframe.
+            extend_start, extend_end = start, end
+            if not range_between_df(extend_start, extend_end, df_avail):
+                extend_start, extend_end = extend_limits(extend_start,extend_end)
+                df_avail = extend_avail_df(extend_start, extend_end, df_avail)
+
+            # Is the requested range marked as cached?
+            # If the mode is adev, check also if the avg_window size has changed
+            if mode == "adev":
+                not_cached = df_avail.query("time >= @start and time <= @end and (cached == False or avg_window != @avg_window)")
+                avg_window_changed = any(df_avail.query("time >= @start and time <= @end and avg_window != @avg_window"))
+            else:
+                not_cached = df_avail.query("time >= @start and time <= @end and cached == False")
+                avg_window_changed = False
+
+
+            pbar.set_description("Using cached data for '{}'.".format(measurement))
+            if not not_cached.empty:
+                pbar.set_description("Fetching '{}' data.".format(measurement))
+
+                # Fetch missing data
+                fetch_start = not_cached['time'].iloc[0] - timedelta(seconds=5)
+                fetch_stop = not_cached['time'].iloc[-1] + timedelta(seconds=5)
+
+                avg_window_fetch = int(avg_window) if not avg_window == "" else None
+
+                new_df = self.influxdb.db_to_df(fetch_start, fetch_stop, measurement=measurement, avg_window=avg_window_fetch)
+
+                # If the avg_window has changed for the region, drop old data
+                if avg_window_changed and not (main_df is None):
+                    rows_to_drop = main_df.query("_measurement == @measurement and _time >= @fetch_start and _time <= @fetch_stop").index
+                    if not rows_to_drop.empty:
+                        main_df.drop(rows_to_drop, inplace=True)
+
+                main_df = pd.concat([main_df, new_df], ignore_index=True).sort_values(by='_time')
+
+                # Mark the region as saved
+                df_avail.loc[df_avail['time'].isin(not_cached['time']),['name','cached','avg_window']] = [measurement, True, str(avg_window)]
+
+                # If the mode is "adev", plot availability
+                if mode == "adev":
+                    self.update_availability_plot(measurement)
+
+            # Save changes to dictionary
+            self.data_avail_dct[mode][measurement] = df_avail
+
+        return main_df
+
+    def get_param_dt_limits(self):
         start = self.param_tree.param.child("Data acquisition", "Start").value()
         stop = self.param_tree.param.child("Data acquisition", "Stop").value()
 
@@ -169,14 +260,20 @@ class MainWindow(QMainWindow):
         start = self.string_to_date(start)
         stop = self.string_to_date(stop)
         #
+        return start, stop
+
+    def get_temporal_data(self):
+        influx_df = self.influxdb_data_temp
+
+        start, stop = self.get_param_dt_limits()
 
         # Calculate moving average window
         avg_window = int((stop.timestamp()-start.timestamp())/1000)
         #
+        measurement_list = [None] # Fetch all available measurements
+        influx_df = self.smart_fetch(start, stop, measurement_list, avg_window, "temporal", influx_df)
 
-        self.influxdb_data_temp = self.influxdb.db_to_df(start, stop, avg_window)
-
-        influx_df = self.influxdb_data_temp
+        # Populate table measurements
         measurements = influx_df["_measurement"].unique()
         measurements.sort()
         for i, measurement in enumerate(measurements):
@@ -194,25 +291,14 @@ class MainWindow(QMainWindow):
                 True if i == 0 else False, # Plot_adev (first one is visible)
                 ]
 
-        # Redefine adev data availability dataframe
-        self.data_adev_availability_dct = {
-            measurement : pd.DataFrame({
-                            'time': pd.date_range(start=start, end=stop, freq='1s'),
-                            'saved': False,
-                            'avg_window': ""
-                            })
-        for measurement in measurements
-        }
+        self.influxdb_data_temp = influx_df
 
-        # Return start, stop in UTC
-        # return start, stop
-
-        # Return start,stop in Paris,Europe
+    def autoset_region(self):
+        # Available data (temporal plot)
+        start, stop = self.get_param_dt_limits()
         start = start.astimezone(ZoneInfo("Europe/Paris"))
         stop = stop.astimezone(ZoneInfo("Europe/Paris"))
-        return start, stop
 
-    def autoset_region(self, start, stop):
         # Parameters
         region_param = self.param_tree.param.child("Data processing", "Allan deviation", "Region size")
         start_param = self.param_tree.param.child("Data processing", "Allan deviation", "Start")
@@ -237,7 +323,8 @@ class MainWindow(QMainWindow):
         region_size = (stop-start)*0.1 # 10% of the data
         region_param.setValue(region_size)
 
-    def autoscale_x_axis(self, start, stop):
+    def autoscale_x_axis(self):
+        start, stop = self.get_param_dt_limits()
         # Autoscale temporal plot
         for plot in self.temp_widget.plots.values():
             plot["widget"].setXRange(start.timestamp(),stop.timestamp())
@@ -321,87 +408,28 @@ class MainWindow(QMainWindow):
             plot["widget"].setXLink(self.temp_widget.coverage_widget)
 
     def update_availability_plot(self, measurement):
-        df_avail = self.data_adev_availability_dct[measurement]
+        df_avail = self.data_avail_dct['adev'][measurement]
 
         x = (df_avail['time'].astype('int64')/1e9).to_numpy()
-        y = df_avail['saved'].to_numpy()
+        y = df_avail['cached'].to_numpy()
         self.temp_widget.update_availability_plot(x, y, measurement)
-
-    def fetch_missing_adev_data(self, start: datetime, stop: datetime):
-        start -= timedelta(seconds=5)
-        stop += timedelta(seconds=5)
-
-        # Fetch data of only visible traces
-        measurement_list = self.table_df.loc[self.table_df['Plot_adev'] == True, 'Name'].values
-
-        if len(measurement_list.tolist()) == 0:
-            print("No ADev traces visible.")
-            return
-
-        for measurement in (pbar := tqdm(measurement_list)):
-            pbar.set_description("Using cached data for '{}'.".format(measurement))
-
-            df_avail = self.data_adev_availability_dct[measurement]
-            df_adev = self.influxdb_data_adev
-
-            avg_window = self.param_tree.param.child('Data processing', 'Allan deviation', 'Initial tau (s)').value()
-
-            # If the average window size changed, force fetch operation
-            region_availability = df_avail.query("time >= @start and time <= @stop")
-            region_availability_win = region_availability['avg_window'].unique()
-
-            if (len(region_availability_win) != 1) or (region_availability_win != avg_window):
-
-                # If the avg window changed, fetch the selected data (keep previously fetched data) - Not used
-                # df_avail.loc[(df_avail['time'] >= start) & (df_avail['time'] <= stop), 'saved'] = False # Replace only selected data
-                # df_adev = df_adev.drop((df_adev.loc[(df_adev['_time'] >= start) & (df_adev['_time'] <= stop) & (df_adev['_measurement'] == measurement)]).index) # Drop selected data
-
-                # If the avg window changed, start fresh - Preferred version.
-                df_avail.loc[df_avail.index, 'saved'] = False  # Replace all
-                df_adev = df_adev.drop(df_adev.index) # Drop all
-
-            missing = df_avail.query(
-            "time >= @start and time <= @stop and saved == False"
-            )
-
-            if not missing.empty:
-                pbar.set_description("Fetching '{}' data.".format(measurement))
-
-                # Fetch missing data
-                fetch_start = missing['time'].iloc[0] - timedelta(seconds=5)
-                fetch_stop = missing['time'].iloc[-1] + timedelta(seconds=5)
-
-                avg_window_fetch = int(avg_window) if not avg_window == "" else None
-
-                new_df = self.influxdb.db_to_df(fetch_start, fetch_stop, measurement=measurement, avg_window=avg_window_fetch)
-
-                df_adev = pd.concat([df_adev, new_df], ignore_index=True).sort_values(by='_time').drop_duplicates()
-
-                # Mark the region as saved
-                df_avail.loc[df_avail['time'].isin(missing['time']),['name','saved','avg_window']] = [measurement, True, str(avg_window)]
-
-                # Plot availability
-                self.update_availability_plot(measurement)
-
-                # Apply Dataframe changes
-                self.influxdb_data_adev = df_adev
-                self.data_adev_availability_dct[measurement] = df_avail
-
 
     def update_adev_plot(self, measurement=None):
         start = self.string_to_date(self.param_tree.param.child("Data processing", "Allan deviation", "Start").value())
         stop = self.string_to_date(self.param_tree.param.child("Data processing", "Allan deviation", "Stop").value())
 
         # Check if requested range is contained
-        self.fetch_missing_adev_data(start, stop)
+        measurement_list = self.table_df.query("Plot_adev == True")['Name'] # Fetch and calculate only visible
+        avg_window = self.param_tree.param.child('Data processing', 'Allan deviation', 'Initial tau (s)').value()
         df = self.influxdb_data_adev
 
-        measurement_list = df["_measurement"].unique() if measurement == None else [measurement]
+        df = self.smart_fetch(start, stop, measurement_list, avg_window, "adev", df)
+        self.influxdb_data_adev = df
+
         # Use timestamp
         start = start.timestamp()
         stop = stop.timestamp()
 
-        # for measurement in measurement_list:
         for measurement in (pbar := tqdm(measurement_list)):
             pbar.set_description("Calculating ADev for '{}'.".format(measurement))
 
@@ -409,6 +437,7 @@ class MainWindow(QMainWindow):
                 # Skip and mark as "to be updated" (to be updated when it becomes visible)
                 self.adev_widget.plots[measurement]['to_be_updated'] = True
                 continue
+
             measurement_df = df[df["_measurement"] == measurement]
 
             ## Allan deviation
@@ -519,10 +548,10 @@ class MainWindow(QMainWindow):
         self.param_tree.params_changing = False
 
         # Update plots and table
-        start, stop = self.get_data()
+        self.get_temporal_data()
         self.populate_main_measurement()
         self.update_temporal_plot()
-        self.autoscale_x_axis(start, stop)
+        self.autoscale_x_axis()
         self.link_regions(None)
         if self.param_tree.param.child("Data processing", "Allan deviation", "Auto calculate").value():
             self.update_adev_plot()
