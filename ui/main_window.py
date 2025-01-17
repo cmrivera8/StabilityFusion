@@ -12,6 +12,7 @@ from engineering_notation import EngNumber
 from scipy.stats import linregress
 from tqdm import tqdm
 from datemath import datemath
+import re
 
 from ui.parameter_tree import ParameterTreeWidget
 from ui.temporal_widget import TemporalWidget
@@ -273,9 +274,16 @@ class MainWindow(QMainWindow):
         measurement_list = [None] # Fetch all available measurements
         influx_df = self.smart_fetch(start, stop, measurement_list, avg_window, "temporal", influx_df)
 
+        # Sort by measurement name (Natural sorting function)
+        def natural_sort(series):
+            convert = lambda text: int(text) if text.isdigit() else text.lower()
+            alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
+            return series.map(lambda x: tuple(alphanum_key(x)))
+        influx_df = influx_df.sort_values(by="_measurement", key=natural_sort)
+
         # Populate table measurements
         measurements = influx_df["_measurement"].unique()
-        measurements.sort()
+
         for i, measurement in enumerate(measurements):
             # Check if row exists
             if self.table_df["Name"].eq(measurement).any():
@@ -382,13 +390,18 @@ class MainWindow(QMainWindow):
         first_plot = None
 
         measurements = df["_measurement"].unique()
-        measurements.sort()
+
         for measurement in measurements:
             measurement_df = df[df["_measurement"] == measurement]
 
             time = pd.to_datetime(measurement_df["_time"]).to_numpy()
             time = np.array([ts.timestamp() for ts in time])
-            value = measurement_df["_value"].to_numpy()
+            value = measurement_df["value"].to_numpy()
+
+            # Sort by timestamp
+            arg_sort = np.argsort(time)
+            time = time[arg_sort]
+            value = value[arg_sort]
 
             # Resample data to 1s
             if np.mean(np.diff(time)) < 1:
@@ -443,7 +456,12 @@ class MainWindow(QMainWindow):
             ## Allan deviation
             time = pd.to_datetime(measurement_df["_time"]).to_numpy()
             time = np.array([ts.timestamp() for ts in time])
-            value = measurement_df["_value"].to_numpy()
+            value = measurement_df["value"].to_numpy()
+
+            # Sort by timestamp
+            arg_sort = np.argsort(time)
+            time = time[arg_sort]
+            value = value[arg_sort]
 
             region = np.where((time > start) & (time < stop))
             if np.size(region) == 0:
@@ -588,7 +606,7 @@ class MainWindow(QMainWindow):
 
         time = pd.to_datetime(measurement_df["_time"]).to_numpy()
         time = np.array([ts.timestamp() for ts in time])
-        value = measurement_df["_value"].to_numpy()
+        value = measurement_df["value"].to_numpy()
 
         start = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Start")).timestamp()
         stop = self.param_to_datetime(self.param_tree.param.child("Data processing", "Allan deviation", "Stop")).timestamp()
@@ -599,7 +617,7 @@ class MainWindow(QMainWindow):
             region = np.arange(len(time))
 
         time = time[region]
-        value = df.loc[df["_measurement"] == measurement]["_value"].to_numpy()[region]
+        value = df.loc[df["_measurement"] == measurement]["value"].to_numpy()[region]
 
         return time, value
 

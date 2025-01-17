@@ -36,10 +36,6 @@ class InfluxDBHandler:
         write_client = InfluxDBClient(url=self.url, token=self.token, org=self.org)
         self.query_api = write_client.query_api()
 
-    def flux_to_points_obj(self, fluxtable):
-        fluxtable_json = json.loads(fluxtable.to_json(), object_hook=lambda d: SimpleNamespace(**d))
-        return fluxtable_json
-
     def db_to_df(self, start: datetime, stop: datetime, avg_window=None, measurement=None):
         # Divide request in 1h blocks
         block_duration = timedelta(hours=1)
@@ -47,10 +43,6 @@ class InfluxDBHandler:
         use_progress = total_duration > block_duration
         num_blocks = (total_duration//block_duration)+1
         current_start = start
-
-        # Testing
-        # self.db_df = pd.read_pickle("test.pkl") # Load
-        # return self.db_df
 
         # Define measurements to be fetched
         measurement_query = None
@@ -91,23 +83,21 @@ class InfluxDBHandler:
                 """
             #
 
-            fluxtable_json = self.flux_to_points_obj(self.query_api.query(query, org=self.org))
+            # Using query_data_frame
+            query += """
+            |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+            """
+            block_df = self.query_api.query_data_frame(query,org=self.org)
 
-            # Skip empty blocks
-            if len(fluxtable_json) == 0:
-                current_start = current_stop
-                continue
-            #
+            # Drop unused columns
+            for col in ["result", "table", "_start", "_stop"]:
+                block_df = block_df.drop(columns=col)
 
-            block_df = pd.DataFrame([vars(row) for row in fluxtable_json])
+            # Convert _time columns to datetime in UTC
+            block_df["_time"] = pd.to_datetime(block_df["_time"], format='mixed', utc=True)
 
-            # Convert _start,_stop,_time columns to datetime in UTC
-            for col in ["_start", "_stop", "_time"]:
-                block_df[col] = pd.to_datetime(block_df[col], format='mixed', utc=True)
-
-            # Convert "_start", "_stop", "_time" columns to Europe/Paris timezone
-            for col in ["_start", "_stop", "_time"]:
-                block_df[col] = block_df[col].dt.tz_convert("Europe/Paris")
+            # Convert _time columns to Europe/Paris timezone
+            block_df["_time"] = block_df["_time"].dt.tz_convert("Europe/Paris")
 
             df_list.append(block_df)
 
@@ -115,8 +105,5 @@ class InfluxDBHandler:
 
         # Combine all chunks into the final DataFrame
         self.db_df = pd.concat(df_list, ignore_index=True) if len(df_list) != 0 else None
-
-        # Testing
-        # self.db_df.to_pickle("test_2.pkl") # Save
 
         return self.db_df
