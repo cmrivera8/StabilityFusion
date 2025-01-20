@@ -359,7 +359,7 @@ class MainWindow(QMainWindow):
 
     def param_to_datetime(self, param):
         value = param.value()
-        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+        return datetime.strptime(value.split(".")[0], "%Y-%m-%d %H:%M:%S")
 
     def link_regions(self, sender):
         if self.param_tree.params_changing:

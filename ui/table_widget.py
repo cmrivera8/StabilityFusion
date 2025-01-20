@@ -3,7 +3,6 @@ import numpy as np
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView, QCheckBox, QWidget, QAbstractScrollArea, QHBoxLayout, QLabel, QPushButton,QLineEdit
 from PyQt5.QtCore import Qt
 from PyQt5.QtCore import pyqtSignal
-from engineering_notation import EngNumber
 
 class AutoValueCell(QWidget):
     value_changed = pyqtSignal()
