@@ -13,6 +13,7 @@ from scipy.stats import linregress
 from tqdm import tqdm
 from datemath import datemath
 import re
+import asyncio
 
 from ui.parameter_tree import ParameterTreeWidget
 from ui.temporal_widget import TemporalWidget
@@ -226,7 +227,7 @@ class MainWindow(QMainWindow):
 
                 avg_window_fetch = int(avg_window) if not avg_window == "" else None
 
-                new_df = self.influxdb.db_to_df(fetch_start, fetch_stop, measurement=measurement, avg_window=avg_window_fetch)
+                new_df = asyncio.run(self.influxdb.db_to_df(fetch_start, fetch_stop, measurement=measurement, avg_window=avg_window_fetch))
 
                 # If the avg_window has changed for the region, drop old data
                 if avg_window_changed and not (main_df is None):
@@ -269,7 +270,7 @@ class MainWindow(QMainWindow):
         start, stop = self.get_param_dt_limits()
 
         # Calculate moving average window
-        avg_window = int((stop.timestamp()-start.timestamp())/1000)
+        avg_window = max(int((stop.timestamp()-start.timestamp())/1000), 1)
         #
         measurement_list = [None] # Fetch all available measurements
         influx_df = self.smart_fetch(start, stop, measurement_list, avg_window, "temporal", influx_df)
