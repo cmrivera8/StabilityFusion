@@ -40,41 +40,10 @@ class AutoValueCell(QWidget):
 
     def emit_value_changed(self):
         try:
-            self.value_label.setText(str(EngNumber(self.value_label.text())))
+            self.value_label.setText(self.value_label.text())
         except Exception as e:
             pass
         self.value_changed.emit()
-
-    def toggle_auto(self):
-        """
-        Toggles between manual and automatic mode.
-        """
-        if not self.is_auto:
-            # Compute and set the automatic value
-
-            # QLineEdit
-            auto_value = self.compute_callback()
-            self.old_manual = self.value_label.text()
-            self.value_label.setText(str(auto_value))
-            self.value_label.setStyleSheet("color: gray;")  # Indicate auto mode
-            self.value_label.setReadOnly(True)
-            self.is_auto = True
-
-            # Button
-            self.auto_button.setText("Manual")
-        else:
-            # Switch back to manual mode
-
-            # QLineEdit
-            self.value_label.setStyleSheet("color: black;")  # Indicate manual mode
-            self.value_label.setReadOnly(False)
-            self.value_label.setText(self.old_manual)
-            self.is_auto = False
-
-            # Button
-            self.auto_button.setText("Auto")
-
-        self.emit_value_changed()
 
 class DataTableWidget(QTableWidget):
     dataframe_updated = pyqtSignal(int, int)
@@ -114,10 +83,8 @@ class DataTableWidget(QTableWidget):
             for col, column in enumerate(self.dataframe.columns):
                 value = self.dataframe.iloc[row,col]
 
-                def compute_auto_value():
-                    return 88
-
-                if isinstance(value, np.bool_):
+                if str(value) in ['True', 'False']:
+                    value = np.bool(value == 'True') if isinstance(value, str) else value
                     item = QTableWidgetItem()
                     item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
                     item.setCheckState(Qt.Checked if value else Qt.Unchecked)
@@ -136,7 +103,6 @@ class DataTableWidget(QTableWidget):
                     # self.horizontalHeader().setSectionResizeMode(col, QHeaderView.Interactive)  # Column 0: Manual resizing
                     self.setItem(row, col, QTableWidgetItem(str(value)))
 
-
         self.updating = False
 
     def connect_auto_value(self):
@@ -149,11 +115,11 @@ class DataTableWidget(QTableWidget):
 
             if self.dataframe.columns[col] in ["Plot_temp", "Plot_adev"]:
                 if item.flags() & Qt.ItemIsUserCheckable:
-                    self.dataframe.iloc[row,col] = item.checkState() == Qt.Checked
+                    self.dataframe.iloc[row,col] = str(item.checkState() == Qt.Checked)
 
             if self.dataframe.columns[col] in ["Coeff_","Fractional_"]:
                 try:
-                    self.dataframe.iloc[row,col] = float(EngNumber(item.value_label.text()))
+                    self.dataframe.iloc[row,col] = item.value_label.text()
                 except Exception as e:
                     print("Wrong input, error: ", e)
                     return

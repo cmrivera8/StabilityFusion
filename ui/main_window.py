@@ -8,7 +8,6 @@ from zoneinfo import ZoneInfo
 import copy
 import os
 import json
-from engineering_notation import EngNumber
 from scipy.stats import linregress
 from tqdm import tqdm
 from datemath import datemath
@@ -23,6 +22,13 @@ from database.influxdb_handler import InfluxDBHandler
 from data_processing.moving_average import moving_average
 from data_processing.allan_deviation import get_stab
 from data_processing.utils import resample_data
+
+# Preset serialization
+class DataEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, np.ndarray):
+            return o.tolist()
+        return o.__dict__
 
 class MainWindow(QMainWindow):
     def __init__(self, influxdb: InfluxDBHandler):
@@ -299,8 +305,8 @@ class MainWindow(QMainWindow):
                 False, # Main
                 measurement, # Name
                 "", # Description
-                1, # Coeff_
-                1, # Fractional_
+                "1", # Coeff_
+                "1", # Fractional_
                 True, # Plot_temp
                 True if i == 0 else False, # Plot_adev (first one is visible)
                 ]
@@ -438,7 +444,15 @@ class MainWindow(QMainWindow):
         stop = self.string_to_date(self.param_tree.param.child("Data processing", "Allan deviation", "Stop").value())
 
         # Check if requested range is contained
-        measurement_list = self.table_df.query("Plot_adev == True")['Name'] # Fetch and calculate only visible
+        if type(self.table_df.iloc[0,6]) == str:
+            test_value = "'True'"
+        else:
+            test_value = "True"
+
+        measurement_list = self.table_df.query(f"Plot_adev == {test_value}")['Name'].to_list() if measurement is None else measurement # Fetch and calculate only visible
+        if not isinstance(measurement_list,list):
+            measurement_list = [measurement_list]
+
         avg_window = self.param_tree.param.child('Data processing', 'Allan deviation', 'Initial tau (s)').value()
         df = self.influxdb_data_adev
 
@@ -451,11 +465,6 @@ class MainWindow(QMainWindow):
 
         for measurement in (pbar := tqdm(measurement_list)):
             pbar.set_description("Calculating ADev for '{}'.".format(measurement))
-
-            if self.adev_widget.plots.get(measurement) and not self.adev_widget.plots[measurement]['data'].isVisible():
-                # Skip and mark as "to be updated" (to be updated when it becomes visible)
-                self.adev_widget.plots[measurement]['to_be_updated'] = True
-                continue
 
             measurement_df = df[df["_measurement"] == measurement]
 
@@ -502,28 +511,30 @@ class MainWindow(QMainWindow):
             plot["widget"].setAutoVisible(y=True)
 
     def handle_dataframe_update(self, row, col):
-        option = self.table_df.columns[col]
-
+        column_title = self.table_df.columns[col]
         measurement = self.table_df.iloc[row,1]
         value = self.table_df.iloc[row,col]
 
-        # Control plots visibility
-        if option == "Plot_temp":
+        adev_visible = (self.table_df.iloc[row,6] == 'True')
+        if value in ['True', 'False']:
+            value = (value == 'True')
+
+        # Plot visibility
+        ## Temporal
+        if column_title == "Plot_temp":
+            # Toggle visibility
             self.temp_widget.plots[measurement]["widget"].setVisible(value)
-
-        if option == "Plot_adev":
+        ## Adev
+        if column_title == "Plot_adev":
             # Check if the plot exists, if not, create it
-            if not self.adev_widget.plots.get(measurement):
+            if not self.adev_widget.plots.get(measurement) and adev_visible:
                 self.update_adev_plot(measurement)
-                return
 
+            # Toggle visibility
             self.adev_widget.plots[measurement]["data"].setVisible(value)
-            if self.adev_widget.plots[measurement].get("to_be_updated") and self.adev_widget.plots[measurement]["to_be_updated"]:
-                # Update was skipped when it was hidden
-                self.update_adev_plot(measurement)
-                self.adev_widget.plots[measurement]["to_be_updated"] = False
 
-        if option in ["Coeff_","Fractional_"]:
+        # Coupling and Fractional coefficient
+        if column_title in ["Coeff_", "Fractional_"] and adev_visible:
             self.update_adev_plot(measurement)
 
     def populate_main_measurement(self):
@@ -547,18 +558,32 @@ class MainWindow(QMainWindow):
         preset_name = self.param_tree.param.child("Presets", "Name").value()
         self.table_df.to_json("presets/"+preset_name+".json")
 
+        # Convert from relative to absolute timestamp (From the current temporal data)
+        def rel_to_abs(param,index):
+            try:
+                if any([val in param.value() for val in ['y', 'Y', 'M', 'm', 'd', 'D', 'w', 'h', 'H', 's', 'S', 'now']]):
+                    df = self.influxdb_data_temp
+                    first_meas = df["_measurement"].unique()[0]
+                    df = df[df["_measurement"] == first_meas]
+
+                    abs_val = df["_time"].sort_values().iloc[index].strftime("%Y-%m-%d %H:%M:%S")
+
+                    param.setValue(abs_val)
+            except Exception as e:
+                print("Error at converting relative to absolute timestamp: ", e)
+
+        rel_to_abs(self.param_tree.param.child("Data acquisition", "Start"),0)
+        rel_to_abs(self.param_tree.param.child("Data acquisition", "Stop"),-1)
+
         # Save parameter tree state
-        state = json.dumps(self.param_tree.param.saveState())
+        state = json.dumps(self.param_tree.param.saveState(), indent=4, cls=DataEncoder)
         filename = "presets/"+preset_name+"_tree.json"
         with open(filename, "w") as outfile:
             outfile.write(state)
 
     def load_preset(self):
         preset_name = self.param_tree.param.child("Presets", "Name").value()
-        new_df = pd.read_json("presets/"+preset_name+".json")
-
-        new_df['Coeff_'] = new_df['Coeff_'].apply(lambda x: EngNumber(float(x)))
-        new_df['Fractional_'] = new_df['Fractional_'].apply(lambda x: EngNumber(float(x)))
+        new_df = pd.read_json("presets/"+preset_name+".json", dtype=str)
 
         self.table_df.drop(self.table_df.index, inplace=True)
         self.table_df[self.table_df.columns] = new_df
@@ -577,14 +602,10 @@ class MainWindow(QMainWindow):
         self.update_temporal_plot()
         self.autoscale_x_axis()
         self.link_regions(None)
-        if self.param_tree.param.child("Data processing", "Allan deviation", "Auto calculate").value():
-            self.update_adev_plot()
 
         self.update_table()
 
-        for col in range(len(self.table_df.columns)):
-            for row in range(len(self.table_df.index)):
-                self.handle_dataframe_update(row,col)
+        self.update_adev_plot()
 
     def remove_preset(self):
         preset_name = self.param_tree.param.child("Presets", "Name").value()
@@ -654,7 +675,29 @@ class MainWindow(QMainWindow):
         if item_type == "Fractional_":
             value = np.mean(param_val)
 
-        widget.value_label.setText(str(EngNumber(value)))
+        def strip_zeros(value):
+            formatted = "{:.3e}".format(value)
+            if "e" in formatted:
+                # Split into coefficient and exponent, then strip zeros from coefficient
+                coeff, exp = formatted.split("e")
+                coeff = coeff.rstrip("0").rstrip(".")
+
+                # +003 -> 3
+                if "+" in exp:
+                    exp = exp.replace("+","").lstrip("0")
+
+                # -003 -> -3
+                if "-" in exp:
+                    exp = "-"+exp.replace("-","").lstrip("0")
+
+                return f"{coeff}e{exp}"
+            else:
+                return str(float(formatted))  # Remove unnecessary zeros for non-exponential form
+
+        widget.value_label.setText(strip_zeros(value))
 
         # Apply value
         widget.value_label.returnPressed.emit()
+
+        # Recalculate ADev plot
+        self.update_adev_plot()
