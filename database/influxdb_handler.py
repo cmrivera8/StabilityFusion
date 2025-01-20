@@ -7,7 +7,6 @@ from influxdb_client import InfluxDBClient
 from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 from tqdm.asyncio import tqdm
 import re
-from utils.utils import *
 import asyncio
 
 def load_config(config_path):

@@ -101,6 +101,11 @@ class MainWindow(QMainWindow):
             if self.param_tree.param.child("Data processing", "Allan deviation", "Auto calculate").value():
                 self.update_adev_plot()
 
+        if param.name() == 'Clear data':
+            self.influxdb_data_temp = None
+            self.influxdb_data_adev = None
+            self.data_avail_dct = {}
+
         # Data processing
         if param.name() == 'Moving Average':
             self.update_temporal_plot()

@@ -11,6 +11,7 @@ class ParameterTreeWidget(ParameterTree):
                 {'name': 'Start', 'type': 'str', 'value': "now-1h"},
                 {'name': 'Stop', 'type': 'str', 'value': "now"},
                 {'name': 'Get data', 'type': 'action'},
+                {'name': 'Clear data', 'type': 'action'},
             ]},
             {'name': 'Data processing', 'type': 'group', 'children': [
                 {'name': 'Moving Average', 'type': 'int', 'value': 1},
