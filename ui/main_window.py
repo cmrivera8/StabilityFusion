@@ -690,7 +690,11 @@ class MainWindow(QMainWindow):
                 if "-" in exp:
                     exp = "-"+exp.replace("-","").lstrip("0")
 
-                return f"{coeff}e{exp}"
+                # Handle exp = 0
+                res = f"{coeff}"
+                res += f"e{exp}" if exp != "" else ""
+
+                return res
             else:
                 return str(float(formatted))  # Remove unnecessary zeros for non-exponential form
 
