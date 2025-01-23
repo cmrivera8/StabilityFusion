@@ -26,6 +26,9 @@ class ParameterTreeWidget(ParameterTree):
                     {'name': 'Zoom region', 'type': 'action'},
                 ]},
             ]},
+            {'name': 'Allan deviation plot settings', 'type': 'group', 'children': [
+                {'name': 'Error bars', 'type': 'list', 'value': '', 'limits': ['Fill between','Bars']},
+            ]},
             {'name': 'Global settings', 'type': 'group', 'children': [
                 {'name': 'Main measurement', 'type': 'list', 'value': '', 'limits': ['']},
                 {'name': 'Plot type', 'type': 'list', 'value': 'Allan deviation', 'limits': ['Allan deviation','Temporal']},

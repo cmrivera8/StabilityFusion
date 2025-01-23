@@ -126,6 +126,10 @@ class MainWindow(QMainWindow):
             if param.name() in ["Start", "Stop", "Region size"]:
                 self.link_regions(param)
 
+        # Allan deviation plot settings
+        if param.name() == "Error bars":
+            self.update_adev_plot()
+
         # Global settings
         if param.parent().name() == 'Global settings':
             plot_type = self.param_tree.param.child('Global settings','Plot type').value()
@@ -497,6 +501,9 @@ class MainWindow(QMainWindow):
 
             # Calculate Allan deviation
             mode = self.param_tree.param.child("Data processing", "Allan deviation", "Mode").value().lower()
+
+            # Plot settings
+            self.adev_widget.error_bar_mode = self.param_tree.param.child("Allan deviation plot settings", "Error bars").value()
 
             taus, devs, error_bars = get_stab(time[region], value[region], mode)
             self.adev_widget.updateWidget(taus, devs, error_bars, measurement, color)
