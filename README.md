@@ -73,8 +73,10 @@ Visually keep track of cached data:
 The Allan deviation module includes uncertainty analysis:
 - Calculate error bars for uncertainty representation.
 
-<img src="docs/error_bars.png" alt="Error bars" width="300">
-<img src="docs/fill_between.png" alt="Fill between" width="300">
+<div style="display: flex; justify-content: space-between;">
+  <img src="docs/error_bars.png" alt="Error bars" width="300">
+  <img src="docs/fill_between.png" alt="Fill between" width="300">
+</div>
 
 - Flexible tau selection (decade, octave or all).
 
