@@ -194,11 +194,18 @@ class MainWindow(QMainWindow):
                 })
             return df
 
-        def extend_avail_df(start,end,existing_df):
-            new_df = create_avail_df(start,end)
-            new_df = pd.concat([existing_df, new_df], ignore_index=True)
-            new_df = new_df.sort_values(by='time').drop_duplicates(subset='time', keep='first')
-            return new_df
+        def extend_avail_df(start, end, existing_df):
+            # Create the new DataFrame
+            new_df = create_avail_df(start, end)
+
+            # Filter out rows from new_df where 'time' already exists in existing_df
+            new_df = new_df[~new_df['time'].isin(existing_df['time'])]
+
+            # Concatenate and return the updated DataFrame
+            updated_df = pd.concat([existing_df, new_df], ignore_index=True)
+            updated_df = updated_df.sort_values(by='time').reset_index(drop=True)
+
+            return updated_df
 
         def range_between_df(start,end,df):
             return all(create_avail_df(start, end)['time'].between(df['time'].min(),df['time'].max()))
@@ -214,7 +221,7 @@ class MainWindow(QMainWindow):
                 self.data_avail_dct[mode][measurement] = create_avail_df(adjusted_start,adjusted_end)
 
             # Define dataframes shorter name
-            df_avail = self.data_avail_dct[mode][measurement]
+            df_avail = self.data_avail_dct[mode][measurement].sort_values(by='time')
 
             # Is the requested range within the dataframe limits? if not, extend the dataframe.
             extend_start, extend_end = start, end
@@ -253,14 +260,14 @@ class MainWindow(QMainWindow):
                 main_df = pd.concat([main_df, new_df], ignore_index=True).sort_values(by='_time')
 
                 # Mark the region as saved
-                df_avail.loc[df_avail['time'].isin(not_cached['time']),['name','cached','avg_window']] = [measurement, True, str(avg_window)]
-
-                # If the mode is "adev", plot availability
-                if mode == "adev":
-                    self.update_availability_plot(measurement)
+                df_avail.loc[df_avail.query("time>=@fetch_start and time<=@fetch_stop")["time"].index,['cached','avg_window']] = [True, str(avg_window)]
 
             # Save changes to dictionary
             self.data_avail_dct[mode][measurement] = df_avail
+
+            # If the mode is "adev", plot availability
+            if mode == "adev":
+                self.update_availability_plot(measurement)
 
         return main_df
 
