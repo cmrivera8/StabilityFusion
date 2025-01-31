@@ -131,8 +131,8 @@ class MainWindow(QMainWindow):
             self.update_adev_plot()
 
         # Global settings
-        if param.parent().name() == 'Global settings':
-            plot_type = self.param_tree.param.child('Global settings','Plot type').value()
+        if param.parent().name() == 'Plot visibility':
+            plot_type = self.param_tree.param.child('Global settings','Plot visibility','Plot type').value()
             plots = self.temp_widget.plots if plot_type == "Temporal" else self.adev_widget.plots
 
             plot_content = 'data' if plot_type == 'Allan deviation' else 'widget'
@@ -145,8 +145,17 @@ class MainWindow(QMainWindow):
                 [plots[key][plot_content].setVisible(False) for key in plots.keys()]
                 self.table_df[table_col] = False
 
-            # Update table
             self.update_table()
+
+        if param.parent().name() == 'Global coefficient' and param.name() == 'Apply':
+            coeff_type = self.param_tree.param.child('Global settings','Global coefficient','Type').value()
+            col_name = 'Coeff_' if coeff_type == 'Coupling' else 'Fractional_'
+            # Pop-up window to enter value
+            value, ok = QInputDialog.getText(self, f'Global {coeff_type} coefficient', 'Enter global value:')
+
+            if ok:
+                self.table_df[col_name] = value
+                self.update_table()
 
         # Presets
         if param.parent().name() == 'Presets':
