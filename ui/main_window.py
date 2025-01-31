@@ -454,13 +454,9 @@ class MainWindow(QMainWindow):
         start = self.string_to_date(self.param_tree.param.child("Data processing", "Allan deviation", "Start").value())
         stop = self.string_to_date(self.param_tree.param.child("Data processing", "Allan deviation", "Stop").value())
 
-        # Check if requested range is contained
-        if type(self.table_df.iloc[0,6]) == str:
-            test_value = "'True'"
-        else:
-            test_value = "True"
+        # Fetch and calculate only visible
+        measurement_list = self.table_df.query(f"Plot_adev == True")['Name'].to_list() if measurement is None else measurement
 
-        measurement_list = self.table_df.query(f"Plot_adev == {test_value}")['Name'].to_list() if measurement is None else measurement # Fetch and calculate only visible
         if not isinstance(measurement_list,list):
             measurement_list = [measurement_list]
 
@@ -529,9 +525,7 @@ class MainWindow(QMainWindow):
         measurement = self.table_df.iloc[row,1]
         value = self.table_df.iloc[row,col]
 
-        adev_visible = (self.table_df.iloc[row,6] == 'True')
-        if value in ['True', 'False']:
-            value = (value == 'True')
+        adev_visible = (self.table_df.iloc[row,6] == True)
 
         # Plot visibility
         ## Temporal
@@ -599,8 +593,15 @@ class MainWindow(QMainWindow):
         preset_name = self.param_tree.param.child("Presets", "Name").value()
         new_df = pd.read_json("presets/"+preset_name+".json", dtype=str)
 
+        # Convert plot visibility columns to boolean
+        for col in ["Plot_temp", "Plot_adev"]:
+            new_df[col] = new_df[col].map({'True': np.bool_(True), 'False': np.bool_(False)})
+
         self.table_df.drop(self.table_df.index, inplace=True)
         self.table_df[self.table_df.columns] = new_df
+
+        # Update dataframe as reference to table widget
+        self.data_table_widget.dataframe = self.table_df
 
         # Load parameter tree state
         filename = "presets/"+preset_name+"_tree.json"

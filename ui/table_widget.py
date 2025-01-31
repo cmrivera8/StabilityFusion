@@ -82,8 +82,8 @@ class DataTableWidget(QTableWidget):
             for col, column in enumerate(self.dataframe.columns):
                 value = self.dataframe.iloc[row,col]
 
-                if str(value) in ['True', 'False']:
-                    value = np.bool(value == 'True') if isinstance(value, str) else value
+                # Unified boolean test (to avoid use of np.True_/np.False_)
+                if str(value) in ["True", "False"]:
                     item = QTableWidgetItem()
                     item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
                     item.setCheckState(Qt.Checked if value else Qt.Unchecked)
@@ -114,7 +114,7 @@ class DataTableWidget(QTableWidget):
 
             if self.dataframe.columns[col] in ["Plot_temp", "Plot_adev"]:
                 if item.flags() & Qt.ItemIsUserCheckable:
-                    self.dataframe.iloc[row,col] = str(item.checkState() == Qt.Checked)
+                    self.dataframe.iloc[row,col] = (item.checkState() == Qt.Checked)
 
             if self.dataframe.columns[col] in ["Coeff_","Fractional_"]:
                 try:
