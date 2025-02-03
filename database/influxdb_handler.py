@@ -1,4 +1,3 @@
-import json
 import pandas as pd
 from pathlib import Path
 from types import SimpleNamespace
@@ -6,23 +5,9 @@ from datetime import datetime, timedelta
 from influxdb_client import InfluxDBClient
 from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 from tqdm.asyncio import tqdm
-import re
 import asyncio
 
-def load_config(config_path):
-    """Load configuration from a JSON file."""
-    try:
-        with open(config_path, 'r') as f:
-            content = f.read()
-            # Remove comments only when they start a line or follow whitespace
-            content = re.sub(r'^\s*//.*', '', content, flags=re.MULTILINE)
-            content = '\n'.join(line for line in content.splitlines() if line.strip())
-            config = json.loads(content)
-        return config
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Configuration file not found: {config_path}")
-    except json.JSONDecodeError:
-        raise ValueError(f"Invalid JSON format in configuration file: {config_path}")
+from utils.file_tools import load_config
 
 class InfluxDBHandler:
     def __init__(self, config_path="config/settings.json"):

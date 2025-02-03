@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import copy
 import os
-import json
 from scipy.stats import linregress
 from tqdm import tqdm
 from datemath import datemath
@@ -22,13 +21,7 @@ from database.influxdb_handler import InfluxDBHandler
 from data_processing.moving_average import moving_average
 from data_processing.allan_deviation import get_stab
 from data_processing.utils import resample_data
-
-# Preset serialization
-class DataEncoder(json.JSONEncoder):
-    def default(self, o):
-        if isinstance(o, np.ndarray):
-            return o.tolist()
-        return o.__dict__
+from utils.file_tools import *
 
 class MainWindow(QMainWindow):
     def __init__(self, influxdb: InfluxDBHandler):
@@ -225,12 +218,13 @@ class MainWindow(QMainWindow):
 
         for measurement in (pbar := tqdm(measurement_list)):
             # Add measurement to the dictionary if it doesn't exist
-            if not measurement in self.data_avail_dct[mode].keys():
+            measurement_label = "All" if measurement is None else measurement # Assign name "All" for dictionary when fetching all the measurements
+            if not measurement_label in self.data_avail_dct[mode].keys():
                 adjusted_start, adjusted_end = extend_limits(start,end)
-                self.data_avail_dct[mode][measurement] = create_avail_df(adjusted_start,adjusted_end)
+                self.data_avail_dct[mode][measurement_label] = create_avail_df(adjusted_start,adjusted_end)
 
             # Define dataframes shorter name
-            df_avail = self.data_avail_dct[mode][measurement].sort_values(by='time')
+            df_avail = self.data_avail_dct[mode][measurement_label].sort_values(by='time')
 
             # Is the requested range within the dataframe limits? if not, extend the dataframe.
             extend_start, extend_end = start, end
@@ -248,9 +242,9 @@ class MainWindow(QMainWindow):
                 avg_window_changed = False
 
 
-            pbar.set_description("Using cached data for '{}'.".format(measurement))
+            pbar.set_description("Using cached data for '{}'.".format(measurement_label))
             if not not_cached.empty:
-                pbar.set_description("Fetching '{}' data.".format(measurement))
+                pbar.set_description("Fetching '{}' data.".format(measurement_label))
 
                 # Fetch missing data
                 fetch_start = not_cached['time'].iloc[0] - timedelta(seconds=5)
@@ -272,7 +266,7 @@ class MainWindow(QMainWindow):
                 df_avail.loc[df_avail.query("time>=@fetch_start and time<=@fetch_stop")["time"].index,['cached','avg_window']] = [True, str(avg_window)]
 
             # Save changes to dictionary
-            self.data_avail_dct[mode][measurement] = df_avail
+            self.data_avail_dct[mode][measurement_label] = df_avail
 
             # If the mode is "adev", plot availability
             if mode == "adev":
@@ -593,10 +587,23 @@ class MainWindow(QMainWindow):
         rel_to_abs(self.param_tree.param.child("Data acquisition", "Stop"),-1)
 
         # Save parameter tree state
-        state = json.dumps(self.param_tree.param.saveState(), indent=4, cls=DataEncoder)
         filename = "presets/"+preset_name+"_tree.json"
-        with open(filename, "w") as outfile:
-            outfile.write(state)
+        dict_to_json_file(self.param_tree.param.saveState(), filename)
+
+        # Save cached data alongside the preset (if enabled in settings)
+        if "app_settings" in load_config("config/settings.json").keys():
+            save_cached = bool(load_config('config/settings.json')['app_settings']['save_cached'] == "True")
+
+            os.makedirs("presets/cache/", exist_ok=True)
+
+            if save_cached:
+                if not self.influxdb_data_temp is None:
+                    self.influxdb_data_temp.to_pickle("presets/cache/"+preset_name+"_temp.pkl")
+                if not self.influxdb_data_adev is None:
+                    self.influxdb_data_adev.to_pickle("presets/cache/"+preset_name+"_adev.pkl")
+                if not self.data_avail_dct is None:
+                    dict_to_json_file(self.data_avail_dct, "presets/cache/"+preset_name+"_avail.json")
+
 
     def load_preset(self):
         preset_name = self.param_tree.param.child("Presets", "Name").value()
@@ -614,11 +621,27 @@ class MainWindow(QMainWindow):
 
         # Load parameter tree state
         filename = "presets/"+preset_name+"_tree.json"
-        with open(filename, 'r') as openfile:
-                state = json.loads(openfile.read())
+        state = json_file_to_dict(filename)
         self.param_tree.params_changing = True
         self.param_tree.param.restoreState(state)
         self.param_tree.params_changing = False
+
+        # Load cached data alongside the preset (if enabled in settings)
+        if "app_settings" in load_config("config/settings.json").keys():
+            save_cached = bool(load_config('config/settings.json')['app_settings']['save_cached'] == "True")
+
+            if save_cached:
+                filename = "presets/cache/"+preset_name+"_temp.pkl"
+                if file_exists(filename):
+                    self.influxdb_data_temp = pd.read_pickle(filename)
+
+                filename = "presets/cache/"+preset_name+"_adev.pkl"
+                if file_exists(filename):
+                    self.influxdb_data_adev = pd.read_pickle(filename)
+
+                filename = "presets/cache/"+preset_name+"_avail.json"
+                if file_exists(filename):
+                    self.data_avail_dct = json_file_to_dict_df(filename)
 
         # Update plots and table
         self.get_temporal_data()
