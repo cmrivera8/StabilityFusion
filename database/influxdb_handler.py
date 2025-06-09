@@ -1,6 +1,5 @@
 import pandas as pd
 from pathlib import Path
-from types import SimpleNamespace
 from datetime import datetime, timedelta
 from influxdb_client import InfluxDBClient
 from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
@@ -24,53 +23,38 @@ class InfluxDBHandler:
         self.query_api = write_client.query_api()
         self.semaphore = None
 
-    async def fetch_block(self, query):
-        async with self.semaphore:  # Limit concurrent tasks (currently to 3)
-            async with InfluxDBClientAsync(url=self.url, token=self.token, org=self.org) as client:
-                block_df = await client.query_api().query_data_frame(query,org=self.org)
+    async def fetch_block(self, query, client):
+        async with self.semaphore: # Limit concurrent tasks (currently to 3)
+            block_df = await client.query_api().query_data_frame(query, org=self.org)
 
-        if block_df.empty:
-            return None
+        if isinstance(block_df, list):
+            block_df = pd.concat(block_df, ignore_index=True, sort=False)
 
-        # Drop unused columns
-        for col in ["result", "table", "_start", "_stop"]:
-            block_df =block_df.drop(columns=col)
-
-        # Convert _time columns to datetime in UTC
-        block_df["_time"] = pd.to_datetime(block_df["_time"], format='mixed', utc=True)
-
-        # Convert _time columns to Europe/Paris timezone
-        block_df["_time"] = block_df["_time"].dt.tz_convert("Europe/Paris")
-
-        return block_df
-
+        return block_df if not block_df.empty else None
 
     async def db_to_df(self, start: datetime, stop: datetime, avg_window=None, measurement=None):
         # Divide request in 1h blocks
         block_duration = timedelta(hours=1)
-        total_duration = stop-start
-        use_progress = total_duration > block_duration
-        num_blocks = (total_duration//block_duration)+1
+        total_duration = stop - start
+        num_blocks = (total_duration // block_duration) + 1
         current_start = start
 
         # Define measurements to be fetched
         measurement_query = None
-        if not measurement is None:
+        if measurement:
             if isinstance(measurement, str):
                 measurement = [measurement]
-            measurement_query = f"""
-                |> filter(fn: (r) => contains(value: r._measurement, set: {str(measurement).replace("\n","").replace("\'","\"")}))
-            """
+            measurement_query = """
+                |> filter(fn: (r) => contains(value: r._measurement, set: {}))
+            """.format(str(measurement).replace("\n","").replace("\'","\""))
 
-        tasks = []
-
-        # Semaphore must be create in the same thread
-        self.semaphore = asyncio.Semaphore(3)
+        queries = []
         for _ in range(num_blocks):
             current_stop = min(current_start + block_duration, stop)
 
             start_str = current_start.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             stop_str = current_stop.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            current_start = current_stop
 
             if start_str == stop_str:
                 continue
@@ -82,7 +66,7 @@ class InfluxDBHandler:
             """.format(db_bucket=self.bucket, start=start_str, stop=stop_str)
 
             # Fetch specific measurements
-            if not measurement_query is None:
+            if measurement_query:
                 query += measurement_query
 
             # Apply moving average window
@@ -98,14 +82,18 @@ class InfluxDBHandler:
             """
 
             # Create a task for the current block
-            tasks.append(self.fetch_block(query))
-            current_start = current_stop
+            queries.append(query)
+
+        self.semaphore = asyncio.Semaphore(3)
 
         # Run all tasks concurrently
-        df_list = await tqdm.gather(*tasks, desc="Fetching data")
+        async with InfluxDBClientAsync(url=self.url, token=self.token, org=self.org) as client:
+            tasks = [self.fetch_block(query, client) for query in queries]
+            df_list = await tqdm.gather(*tasks, desc="Fetching data")
+            # df_list = await asyncio.gather(*tasks)
 
         # Remove None
-        df_list = [item for item in df_list if not item is None]
+        df_list = [df for df in df_list if df is not None]
 
         # Empty fetch
         if len(df_list) == 0:
@@ -114,7 +102,13 @@ class InfluxDBHandler:
         # Reset state of semaphore, it must be create in the same thread
         self.semaphore = None
 
-        # Combine all chunks into the final DataFrame
-        self.db_df = pd.concat(df_list, ignore_index=True) if len(df_list) != 0 else None
+        if not df_list:
+            return None
+
+        #  Post-process the DataFrame
+        self.db_df = pd.concat(df_list, ignore_index=True)
+        self.db_df = self.db_df.drop(columns=["result", "table", "_start", "_stop"], errors="ignore")
+        self.db_df["_time"] = pd.to_datetime(self.db_df["_time"].values, utc=True)
+        self.db_df["_time"] = self.db_df["_time"].dt.tz_convert("Europe/Paris")
 
         return self.db_df
