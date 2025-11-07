@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors = ["cmrivera8 <carlos.rivera8528@hotmail.com>"]
 channels = ["conda-forge"]
 description = "Tool for analyzing stability and evaluating the contributions of experimental parameters."

@@ -2,7 +2,10 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout,
 import pyqtgraph as pg
 from pyqtgraph.dockarea import *
 import numpy as np
+
 import pandas as pd
+pd.set_option("compute.use_numexpr", False)
+
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import copy
